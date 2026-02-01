@@ -6,9 +6,13 @@ Multi-turn conversation with context.
 
 import time
 import uuid
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
+from PIL import Image
+
+from services.moondream import get_moondream
+from prompts.describe import get_prompt_for_mode
 
 router = APIRouter()
 
@@ -41,8 +45,9 @@ class ConversationResponse(BaseModel):
     contextTokensUsed: int
 
 
-# In-memory conversation store (use Redis in production)
-conversations: dict = {}
+# In-memory conversation store with image cache
+# In production, use Redis or similar
+conversations: Dict[str, dict] = {}
 
 
 @router.post("", response_model=ConversationResponse)
@@ -58,41 +63,100 @@ async def create_or_continue_conversation(request: ConversationRequest):
     """
     start_time = time.time()
 
+    moondream = get_moondream()
+
+    # Check if model is loaded
+    if not moondream.is_loaded():
+        if not moondream.load_model():
+            raise HTTPException(
+                status_code=503,
+                detail="Model not available. Please try again later."
+            )
+
     # Generate or use existing conversation ID
     conv_id = request.conversationId or f"conv_{uuid.uuid4().hex[:8]}"
 
-    # Build context from history
-    context = []
-    for msg in request.history:
-        context.append(f"{msg.role}: {msg.content}")
+    # Get or create conversation state
+    conv_state = conversations.get(conv_id, {
+        "history": [],
+        "last_image": None,
+    })
 
-    # Add current message
-    context.append(f"user: {request.message}")
+    # Decode new image if provided
+    current_image: Optional[Image.Image] = None
+    if request.image:
+        try:
+            current_image = moondream.decode_image(request.image)
+            conv_state["last_image"] = request.image  # Store for follow-ups
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
+    elif conv_state.get("last_image"):
+        # Use cached image for follow-up questions
+        try:
+            current_image = moondream.decode_image(conv_state["last_image"])
+        except Exception:
+            pass
 
-    # TODO: Run Moondream inference with context
-    # from services.moondream import run_conversation
-    # response = await run_conversation(image, context, request.verbosity)
+    if current_image is None:
+        raise HTTPException(
+            status_code=400,
+            detail="No image available. Please provide an image for new conversations."
+        )
 
-    # Placeholder response
-    response_text = f"[Conversation response placeholder] Question: {request.message}"
+    # Build conversation prompt
+    history_context = []
+    for msg in request.history[-5:]:  # Last 5 messages
+        if msg.content and msg.content != "[image]":
+            history_context.append({"role": msg.role, "content": msg.content})
 
-    processing_time = int((time.time() - start_time) * 1000)
+    # Create contextual prompt
+    if history_context:
+        context_str = "\n".join([
+            f"Previous {m['role']}: {m['content']}"
+            for m in history_context
+        ])
+        full_prompt = (
+            f"Context from our conversation:\n{context_str}\n\n"
+            f"Current question: {request.message}\n\n"
+            f"Please answer based on what you see in the image and our conversation context."
+        )
+    else:
+        # First message - use mode-based prompt
+        base_prompt = get_prompt_for_mode("describe", request.verbosity)
+        full_prompt = f"{base_prompt}\n\nUser question: {request.message}"
 
-    # Store conversation state
-    conversations[conv_id] = {
-        "history": request.history + [
-            ConversationMessage(role="user", content=request.message),
-            ConversationMessage(role="assistant", content=response_text),
-        ]
-    }
+    try:
+        # Run inference
+        response_text, confidence, processing_ms = moondream.analyze(
+            current_image,
+            full_prompt
+        )
 
-    return ConversationResponse(
-        conversationId=conv_id,
-        response=response_text,
-        confidence=0.90,
-        processingMs=processing_time,
-        contextTokensUsed=len(" ".join(context).split()),
-    )
+        # Update conversation state
+        conv_state["history"].append(
+            ConversationMessage(role="user", content=request.message)
+        )
+        conv_state["history"].append(
+            ConversationMessage(role="assistant", content=response_text)
+        )
+        conversations[conv_id] = conv_state
+
+        # Estimate token usage
+        context_tokens = sum(len(m.content.split()) for m in conv_state["history"])
+
+        return ConversationResponse(
+            conversationId=conv_id,
+            response=response_text,
+            confidence=confidence,
+            processingMs=processing_ms,
+            contextTokensUsed=context_tokens,
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Conversation failed: {str(e)}"
+        )
 
 
 @router.get("/{conversation_id}")
@@ -103,9 +167,31 @@ async def get_conversation(conversation_id: str):
     - **conversation_id**: The conversation to retrieve
     """
     if conversation_id not in conversations:
-        return {"error": "Conversation not found", "conversationId": conversation_id}
+        raise HTTPException(
+            status_code=404,
+            detail=f"Conversation {conversation_id} not found"
+        )
 
+    conv = conversations[conversation_id]
     return {
         "conversationId": conversation_id,
-        "history": conversations[conversation_id]["history"],
+        "history": conv["history"],
+        "hasImage": conv.get("last_image") is not None,
     }
+
+
+@router.delete("/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """
+    Delete a conversation.
+
+    - **conversation_id**: The conversation to delete
+    """
+    if conversation_id in conversations:
+        del conversations[conversation_id]
+        return {"deleted": True, "conversationId": conversation_id}
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"Conversation {conversation_id} not found"
+    )

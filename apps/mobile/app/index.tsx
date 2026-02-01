@@ -11,17 +11,16 @@ import { CameraView as ExpoCameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
-import { typography } from '@/constants/typography';
 import { layout } from '@/constants';
 import { triggerHaptic } from '@/constants/haptics';
 import { useVisionStore } from '@/stores/visionStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTTS } from '@/hooks/useTTS';
+import { useVision } from '@/hooks/useVision';
 
 import { Text } from '@/components/ui';
 import { CameraView, CaptureButton, ModeSelector } from '@/components/camera';
 import { ResponseCard } from '@/components/response';
-import { analyzeImage } from '@/services/api';
 
 import type { AppMode } from '../../../packages/shared/types';
 
@@ -31,87 +30,25 @@ export default function HomeScreen() {
 
   // Store state
   const {
-    processingState,
     currentMode,
     currentResponse,
     lastProcessingSource,
-    setProcessingState,
     setCurrentMode,
-    setResponse,
     clearResponse,
-    captureFrame,
   } = useVisionStore();
 
-  const { hapticEnabled, verbosity } = useSettingsStore();
+  const { hapticEnabled } = useSettingsStore();
 
-  // TTS hook
-  const { speak, stop, pause, resume, repeat, isSpeaking, isPaused } = useTTS();
+  // TTS hook for audio controls
+  const { pause, resume, repeat, isSpeaking, isPaused } = useTTS();
 
-  // Capture and analyze image
-  const handleCapture = useCallback(async () => {
-    if (!cameraRef.current || processingState !== 'idle') return;
-
-    try {
-      setProcessingState('capturing');
-
-      // Capture photo
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        base64: true,
-      });
-
-      if (!photo?.base64) {
-        throw new Error('Failed to capture photo');
-      }
-
-      captureFrame(photo.base64);
-      setProcessingState('processing');
-
-      // Analyze image
-      const response = await analyzeImage({
-        image: photo.base64,
-        mode: currentMode === 'conversation' ? 'describe' : currentMode,
-        verbosity,
-        language: 'en',
-      });
-
-      setResponse(response);
-      setProcessingState('speaking');
-
-      // Speak the response
-      await speak(response.description, {
-        onDone: () => setProcessingState('idle'),
-        onError: () => setProcessingState('idle'),
-      });
-    } catch (error) {
-      console.error('Capture error:', error);
-      setProcessingState('idle');
-
-      // Speak error message
-      speak('Sorry, I could not analyze the image. Please try again.');
-    }
-  }, [
+  // Vision hook for capture/conversation
+  const {
     processingState,
-    currentMode,
-    verbosity,
-    setProcessingState,
-    captureFrame,
-    setResponse,
-    speak,
-  ]);
-
-  // Handle long press for conversation mode
-  const handleLongPress = useCallback(() => {
-    setProcessingState('listening');
-    // TODO: Implement speech-to-text for conversation mode
-  }, [setProcessingState]);
-
-  const handleLongPressOut = useCallback(() => {
-    if (processingState === 'listening') {
-      setProcessingState('idle');
-      // TODO: Process voice input
-    }
-  }, [processingState, setProcessingState]);
+    captureAndAnalyze,
+    enterConversationMode,
+    exitConversationMode,
+  } = useVision(cameraRef);
 
   // Mode change handler
   const handleModeChange = useCallback(
@@ -147,9 +84,8 @@ export default function HomeScreen() {
   }, [repeat]);
 
   const handleFollowUp = useCallback(() => {
-    setProcessingState('listening');
-    // TODO: Implement follow-up question flow
-  }, [setProcessingState]);
+    enterConversationMode();
+  }, [enterConversationMode]);
 
   return (
     <View style={styles.container}>
@@ -174,13 +110,52 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
+      {/* Processing State Indicator */}
+      {processingState !== 'idle' && (
+        <View style={styles.stateIndicator}>
+          <View
+            style={[
+              styles.stateIndicatorDot,
+              processingState === 'listening' && styles.stateIndicatorListening,
+              processingState === 'processing' && styles.stateIndicatorProcessing,
+              processingState === 'speaking' && styles.stateIndicatorSpeaking,
+            ]}
+          />
+          <Text variant="caption" color="secondary">
+            {processingState === 'capturing' && 'Capturing...'}
+            {processingState === 'listening' && 'Listening...'}
+            {processingState === 'processing' && 'Processing...'}
+            {processingState === 'speaking' && 'Speaking...'}
+          </Text>
+        </View>
+      )}
+
       {/* Camera Preview */}
       <View style={styles.cameraContainer}>
         <CameraView cameraRef={cameraRef} />
+
+        {/* Listening Overlay */}
+        {processingState === 'listening' && (
+          <View style={styles.listeningOverlay}>
+            <View style={styles.listeningIndicator}>
+              <Ionicons
+                name="mic"
+                size={48}
+                color={colors.accent.listening}
+              />
+              <Text variant="heading" center style={styles.listeningText}>
+                Listening...
+              </Text>
+              <Text variant="bodySmall" color="secondary" center>
+                Release to send your question
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Response Card */}
-      {currentResponse && (
+      {currentResponse && processingState !== 'listening' && (
         <View style={styles.responseContainer}>
           <ResponseCard
             text={currentResponse.description}
@@ -196,14 +171,14 @@ export default function HomeScreen() {
 
       {/* Bottom Controls */}
       <View style={styles.bottomControls}>
-        {/* Instructions (hide when response is visible) */}
-        {!currentResponse && (
+        {/* Instructions (hide when response is visible or listening) */}
+        {!currentResponse && processingState === 'idle' && (
           <Text
             variant="bodySmall"
             color="secondary"
             center
             style={styles.instructions}
-            accessibilityLabel="Tap anywhere to describe. Hold for conversation."
+            accessibilityLabel="Tap to describe what you see. Hold to ask questions."
           >
             Tap to describe • Hold to ask
           </Text>
@@ -211,9 +186,9 @@ export default function HomeScreen() {
 
         {/* Main Capture Button */}
         <CaptureButton
-          onPress={handleCapture}
-          onLongPress={handleLongPress}
-          onLongPressOut={handleLongPressOut}
+          onPress={captureAndAnalyze}
+          onLongPress={enterConversationMode}
+          onLongPressOut={exitConversationMode}
           style={styles.captureButton}
         />
 
@@ -246,11 +221,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  stateIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: layout.spacing.sm,
+    paddingVertical: layout.spacing.sm,
+  },
+  stateIndicatorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent.action,
+  },
+  stateIndicatorListening: {
+    backgroundColor: colors.accent.listening,
+  },
+  stateIndicatorProcessing: {
+    backgroundColor: colors.accent.warning,
+  },
+  stateIndicatorSpeaking: {
+    backgroundColor: colors.accent.success,
+  },
   cameraContainer: {
     flex: 1,
     margin: layout.screenPadding,
     borderRadius: layout.borderRadius.lg,
     overflow: 'hidden',
+  },
+  listeningOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listeningIndicator: {
+    alignItems: 'center',
+    gap: layout.spacing.md,
+  },
+  listeningText: {
+    color: colors.accent.listening,
   },
   responseContainer: {
     paddingHorizontal: layout.screenPadding,

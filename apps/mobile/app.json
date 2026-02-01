@@ -53,15 +53,16 @@
         {
           "microphonePermission": "VisionSathi needs microphone access for voice commands."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "apiUrl": "http://localhost:8000",
+      "apiUrl": "http://192.168.1.28:8000",
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": ""
       }
     }
   }

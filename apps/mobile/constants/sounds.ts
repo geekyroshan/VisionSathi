@@ -5,25 +5,26 @@
  * All sounds should respect user's sound preference setting.
  */
 
-// Sound file references (to be added to assets/sounds/)
+// Sound file references - placeholder until actual sound files are added
+// Sound files can be added later to assets/sounds/
 export const sounds = {
   // Capture action
-  capture: require('../assets/sounds/capture.mp3'),
+  capture: null,
 
   // Processing indicator
-  processing: require('../assets/sounds/processing.mp3'),
+  processing: null,
 
   // Success chime
-  success: require('../assets/sounds/success.mp3'),
+  success: null,
 
   // Error tone
-  error: require('../assets/sounds/error.mp3'),
+  error: null,
 
   // Listening started
-  listeningStart: require('../assets/sounds/listening-start.mp3'),
+  listeningStart: null,
 
   // Listening ended
-  listeningEnd: require('../assets/sounds/listening-end.mp3'),
+  listeningEnd: null,
 } as const;
 
 // Note: Sound files need to be created/added

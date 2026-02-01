@@ -26,8 +26,8 @@ class Settings(BaseSettings):
 
     # Model settings
     moondream_model: str = "vikhyatk/moondream2"
-    moondream_device: str = "cuda"  # or "cpu"
-    moondream_dtype: str = "float16"  # or "float32"
+    moondream_device: str = "mps"  # "cuda", "mps" (Apple Silicon), or "cpu"
+    moondream_dtype: str = "float32"  # float16 not well supported on MPS/CPU
 
     # Cache settings
     cache_enabled: bool = True

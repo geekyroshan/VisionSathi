@@ -107,7 +107,7 @@
       ],
       "phase": 2,
       "priority": 2,
-      "passes": false
+      "passes": true
     },
     {
       "id": "A-3",
@@ -137,7 +137,7 @@
       ],
       "phase": 2,
       "priority": 4,
-      "passes": false
+      "passes": true
     },
     {
       "id": "A-5",
@@ -227,7 +227,7 @@
       ],
       "phase": 3,
       "priority": 4,
-      "passes": false
+      "passes": true
     },
     {
       "id": "V-5",
@@ -242,7 +242,7 @@
       ],
       "phase": 3,
       "priority": 5,
-      "passes": false
+      "passes": true
     },
     {
       "id": "V-6",
@@ -272,7 +272,7 @@
       ],
       "phase": 4,
       "priority": 1,
-      "passes": false
+      "passes": true
     },
     {
       "id": "M-2",
@@ -287,7 +287,7 @@
       ],
       "phase": 4,
       "priority": 2,
-      "passes": false
+      "passes": true
     },
     {
       "id": "M-3",
@@ -302,7 +302,7 @@
       ],
       "phase": 4,
       "priority": 3,
-      "passes": false
+      "passes": true
     },
     {
       "id": "M-4",
@@ -317,7 +317,7 @@
       ],
       "phase": 4,
       "priority": 4,
-      "passes": false
+      "passes": true
     },
     {
       "id": "M-5",
@@ -332,7 +332,7 @@
       ],
       "phase": 4,
       "priority": 5,
-      "passes": false
+      "passes": true
     },
     {
       "id": "M-6",
@@ -347,7 +347,7 @@
       ],
       "phase": 4,
       "priority": 6,
-      "passes": false
+      "passes": true
     }
   ]
 }

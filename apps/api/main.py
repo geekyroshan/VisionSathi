@@ -5,6 +5,7 @@ FastAPI backend for VisionSathi visual assistant.
 Provides cloud inference endpoints using Moondream 3.
 """
 
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,22 +17,29 @@ from routers import health, analyze, conversation, modes
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown."""
-    # Startup: Load Moondream model
-    print("Loading Moondream model...")
-    # TODO: Initialize model in services/moondream.py
-    # from services.moondream import load_model
-    # app.state.model = load_model()
-    print("Model loaded successfully!")
+    # Startup: Optionally preload Moondream model
+    preload = os.getenv("PRELOAD_MODEL", "false").lower() == "true"
+
+    if preload:
+        print("Preloading Moondream model...")
+        from services.moondream import get_moondream
+        moondream = get_moondream()
+        if moondream.load_model():
+            print("Model preloaded successfully!")
+        else:
+            print("Warning: Model preload failed. Will load on first request.")
+    else:
+        print("Model will be loaded on first request (set PRELOAD_MODEL=true to preload)")
 
     yield
 
     # Shutdown: Cleanup
-    print("Shutting down...")
+    print("Shutting down VisionSathi API...")
 
 
 app = FastAPI(
     title="VisionSathi API",
-    description="Visual assistant API powered by Moondream 3",
+    description="Visual assistant API powered by Moondream 3 for blind and visually impaired users",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -59,6 +67,8 @@ async def root():
         "name": "VisionSathi API",
         "version": "1.0.0",
         "status": "running",
+        "description": "Visual assistant for blind and visually impaired users",
+        "docs": "/docs",
     }
 
 

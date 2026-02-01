@@ -14,7 +14,7 @@ import type {
 } from '../../../packages/shared/types';
 
 const API_BASE_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:8000';
-const TIMEOUT_MS = 5000;
+const TIMEOUT_MS = 30000; // 30 seconds - Moondream inference can take time
 
 /**
  * Custom error for API failures

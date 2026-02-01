@@ -10,9 +10,9 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 
 # ML/AI
-torch==2.1.2
-transformers==4.37.0
-Pillow==10.2.0
+torch>=2.0.0
+transformers>=4.37.0
+Pillow>=10.0.0
 
 # Moondream
 # Note: Install from source or pip when available
