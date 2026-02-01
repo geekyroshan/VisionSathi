@@ -1,12 +1,13 @@
 ## Codebase Patterns
 
-_Add reusable patterns here as you discover them during implementation._
-
 - Use design tokens from `constants/colors.ts` — never hardcode colors
 - All touchable elements must have accessibilityLabel and accessibilityRole
 - Use Zustand stores for state, not React context
 - API responses always include processingMs for monitoring
 - Moondream prompts live in `prompts/` directory, not inline
+- Use Zustand v5 syntax: `create<State>()((set) => ...)`
+- expo-camera uses `CameraView` not `Camera` in SDK 52
+- Use `--legacy-peer-deps` for npm install if peer conflicts occur
 
 ---
 
@@ -24,3 +25,72 @@ _Add reusable patterns here as you discover them during implementation._
 - Design tokens critical for accessibility compliance
 
 ---
+
+### 2026-02-01 - Phase 1 Complete (F-1 to F-5)
+- **F-1**: Project setup with Expo SDK 52, ESLint, Prettier, TypeScript strict mode
+- **F-2**: Design system with Button, Text, Card, Icon components
+- **F-3**: Camera integration with CameraView, permission handling, 40% overlay
+- **F-4**: Home screen with CaptureButton, ModeSelector, ResponseCard
+- **F-5**: Full accessibility: all elements have labels, roles, hints
+
+**Files Changed:**
+- apps/mobile/components/ui/{Button,Text,Card,Icon}.tsx
+- apps/mobile/components/camera/{CameraView,CaptureButton,ModeSelector}.tsx
+- apps/mobile/components/response/ResponseCard.tsx
+- apps/mobile/app/{index,settings,history}.tsx
+- apps/mobile/stores/{visionStore,settingsStore}.ts
+- apps/mobile/hooks/{useCamera,useTTS,useNetwork}.ts
+- apps/mobile/services/api.ts
+- apps/mobile/constants/{colors,typography,haptics,sounds}.ts
+
+**Learnings:**
+- Zustand v5 requires `create<State>()((set) => ...)` syntax
+- expo-camera SDK 52 uses `CameraView` component
+- StyleSheet arrays with conditional styles need explicit undefined, not falsy values
+- React Native Text style arrays are strict about types
+
+---
+
+### 2026-02-01 - Phase 2 Partial (A-1, A-3)
+- **A-1**: FastAPI backend with health, analyze, conversation, modes endpoints
+- **A-3**: Mobile API client with timeout, error handling, offline detection
+
+**Files Changed:**
+- apps/api/{main,config}.py
+- apps/api/routers/{health,analyze,conversation,modes}.py
+- apps/api/tests/test_health.py
+
+**Learnings:**
+- Pydantic v2 has protected namespaces - avoid `model_*` field names
+- Use `moondream_*` instead for model settings
+
+---
+
+### 2026-02-01 - Phase 3 Partial (V-1, V-2, V-3, V-6)
+- **V-1**: TTS integration with expo-speech, pause/resume/repeat controls
+- **V-2**: Speech speed settings (0.75x, 1.0x, 1.25x)
+- **V-3**: Verbosity settings (brief, normal, detailed)
+- **V-6**: Full settings screen with all sections
+
+**Files Changed:**
+- apps/mobile/hooks/useTTS.ts
+- apps/mobile/app/settings.tsx
+- apps/mobile/stores/settingsStore.ts
+
+---
+
+## Stories Completed: 11/24 (46%)
+
+| Phase | Status |
+|-------|--------|
+| Phase 1 (Foundation) | ✅ 5/5 |
+| Phase 2 (Core AI) | 🟡 2/6 |
+| Phase 3 (Voice) | 🟡 4/6 |
+| Phase 4 (Polish) | ⬜ 0/6 |
+
+## Next Up
+- A-2: Moondream Integration (Backend) - needs actual model loading
+- A-4: Quick Tap Flow (Online) - needs API connection test
+- A-5: ONNX Runtime Setup - needs model export
+- V-4: Conversation Mode (Hold to Talk) - needs STT integration
+- V-5: Multi-turn Conversation Context - needs backend support

@@ -11,7 +11,7 @@ import type {
   ConnectionState,
   ConversationMessage,
   AnalyzeResponse,
-} from '../../packages/shared/types';
+} from '../../../packages/shared/types';
 
 interface VisionState {
   // Camera state
@@ -64,12 +64,12 @@ const initialState = {
   currentResponse: null,
   isSpeaking: false,
   conversationId: null,
-  conversationHistory: [],
+  conversationHistory: [] as ConversationMessage[],
   connectionState: 'checking' as ConnectionState,
   lastProcessingSource: null,
 };
 
-export const useVisionStore = create<VisionState>((set) => ({
+export const useVisionStore = create<VisionState>()((set) => ({
   ...initialState,
 
   // Camera actions

@@ -25,9 +25,9 @@ class Settings(BaseSettings):
     ]
 
     # Model settings
-    model_name: str = "vikhyatk/moondream2"
-    model_device: str = "cuda"  # or "cpu"
-    model_dtype: str = "float16"  # or "float32"
+    moondream_model: str = "vikhyatk/moondream2"
+    moondream_device: str = "cuda"  # or "cpu"
+    moondream_dtype: str = "float16"  # or "float32"
 
     # Cache settings
     cache_enabled: bool = True

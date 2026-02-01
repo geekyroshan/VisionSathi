@@ -4,69 +4,159 @@
  * Main camera view with capture button and mode selector.
  */
 
-import React, { useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  AccessibilityInfo,
-} from 'react-native';
+import React, { useCallback, useRef } from 'react';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
+import { CameraView as ExpoCameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
+
 import { colors } from '@/constants/colors';
 import { typography } from '@/constants/typography';
 import { layout } from '@/constants';
 import { triggerHaptic } from '@/constants/haptics';
 import { useVisionStore } from '@/stores/visionStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useTTS } from '@/hooks/useTTS';
 
-// TODO: Import actual components
-// import { CameraView } from '@/components/camera/CameraView';
-// import { CaptureButton } from '@/components/camera/CaptureButton';
-// import { ModeSelector } from '@/components/camera/ModeSelector';
-// import { ResponseCard } from '@/components/response/ResponseCard';
+import { Text } from '@/components/ui';
+import { CameraView, CaptureButton, ModeSelector } from '@/components/camera';
+import { ResponseCard } from '@/components/response';
+import { analyzeImage } from '@/services/api';
+
+import type { AppMode } from '../../../packages/shared/types';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { processingState, currentMode, currentResponse } = useVisionStore();
-  const { hapticEnabled } = useSettingsStore();
+  const cameraRef = useRef<ExpoCameraView>(null);
 
+  // Store state
+  const {
+    processingState,
+    currentMode,
+    currentResponse,
+    lastProcessingSource,
+    setProcessingState,
+    setCurrentMode,
+    setResponse,
+    clearResponse,
+    captureFrame,
+  } = useVisionStore();
+
+  const { hapticEnabled, verbosity } = useSettingsStore();
+
+  // TTS hook
+  const { speak, stop, pause, resume, repeat, isSpeaking, isPaused } = useTTS();
+
+  // Capture and analyze image
   const handleCapture = useCallback(async () => {
-    triggerHaptic('tap', hapticEnabled);
-    // TODO: Implement capture logic
-    console.log('Capture pressed');
-  }, [hapticEnabled]);
+    if (!cameraRef.current || processingState !== 'idle') return;
 
-  const handleLongPress = useCallback(async () => {
-    triggerHaptic('heavy', hapticEnabled);
-    // TODO: Enter conversation mode
-    console.log('Long press - conversation mode');
-  }, [hapticEnabled]);
+    try {
+      setProcessingState('capturing');
 
-  const handleModeChange = useCallback((mode: 'read' | 'navigate' | 'history') => {
-    triggerHaptic('selection', hapticEnabled);
-    if (mode === 'history') {
-      router.push('/history');
-    } else {
-      useVisionStore.getState().setCurrentMode(mode);
+      // Capture photo
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!photo?.base64) {
+        throw new Error('Failed to capture photo');
+      }
+
+      captureFrame(photo.base64);
+      setProcessingState('processing');
+
+      // Analyze image
+      const response = await analyzeImage({
+        image: photo.base64,
+        mode: currentMode === 'conversation' ? 'describe' : currentMode,
+        verbosity,
+        language: 'en',
+      });
+
+      setResponse(response);
+      setProcessingState('speaking');
+
+      // Speak the response
+      await speak(response.description, {
+        onDone: () => setProcessingState('idle'),
+        onError: () => setProcessingState('idle'),
+      });
+    } catch (error) {
+      console.error('Capture error:', error);
+      setProcessingState('idle');
+
+      // Speak error message
+      speak('Sorry, I could not analyze the image. Please try again.');
     }
-  }, [hapticEnabled, router]);
+  }, [
+    processingState,
+    currentMode,
+    verbosity,
+    setProcessingState,
+    captureFrame,
+    setResponse,
+    speak,
+  ]);
 
+  // Handle long press for conversation mode
+  const handleLongPress = useCallback(() => {
+    setProcessingState('listening');
+    // TODO: Implement speech-to-text for conversation mode
+  }, [setProcessingState]);
+
+  const handleLongPressOut = useCallback(() => {
+    if (processingState === 'listening') {
+      setProcessingState('idle');
+      // TODO: Process voice input
+    }
+  }, [processingState, setProcessingState]);
+
+  // Mode change handler
+  const handleModeChange = useCallback(
+    (mode: AppMode | 'history') => {
+      triggerHaptic('selection', hapticEnabled);
+      if (mode === 'history') {
+        router.push('/history');
+      } else {
+        setCurrentMode(mode);
+        clearResponse();
+      }
+    },
+    [hapticEnabled, router, setCurrentMode, clearResponse]
+  );
+
+  // Settings navigation
   const handleSettingsPress = useCallback(() => {
     triggerHaptic('light', hapticEnabled);
     router.push('/settings');
   }, [hapticEnabled, router]);
+
+  // TTS controls
+  const handleToggleSpeech = useCallback(() => {
+    if (isSpeaking && !isPaused) {
+      pause();
+    } else if (isPaused) {
+      resume();
+    }
+  }, [isSpeaking, isPaused, pause, resume]);
+
+  const handleRepeat = useCallback(() => {
+    repeat();
+  }, [repeat]);
+
+  const handleFollowUp = useCallback(() => {
+    setProcessingState('listening');
+    // TODO: Implement follow-up question flow
+  }, [setProcessingState]);
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerSpacer} />
-        <Text
-          style={styles.headerTitle}
-          accessibilityRole="header"
-        >
+        <Text variant="heading" accessibilityRole="header">
           VisionSathi
         </Text>
         <Pressable
@@ -84,147 +174,51 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      {/* Camera Preview (Placeholder) */}
+      {/* Camera Preview */}
       <View style={styles.cameraContainer}>
-        <View style={styles.cameraPlaceholder}>
-          <Ionicons
-            name="camera-outline"
-            size={64}
-            color={colors.text.secondary}
-          />
-          <Text style={styles.placeholderText}>
-            Camera Preview
-          </Text>
-        </View>
+        <CameraView cameraRef={cameraRef} />
       </View>
 
-      {/* Response Card (if response exists) */}
+      {/* Response Card */}
       {currentResponse && (
         <View style={styles.responseContainer}>
-          <View style={styles.responseCard}>
-            <Text style={styles.responseText}>
-              {currentResponse.description}
-            </Text>
-          </View>
+          <ResponseCard
+            text={currentResponse.description}
+            processingMs={currentResponse.processingMs}
+            source={lastProcessingSource || 'cloud'}
+            isSpeaking={isSpeaking && !isPaused}
+            onToggleSpeech={handleToggleSpeech}
+            onRepeat={handleRepeat}
+            onFollowUp={handleFollowUp}
+          />
         </View>
       )}
 
       {/* Bottom Controls */}
       <View style={styles.bottomControls}>
-        {/* Instructions */}
-        <Text
-          style={styles.instructions}
-          accessibilityLabel="Tap anywhere to describe. Hold for conversation."
-        >
-          Tap anywhere to describe{'\n'}Hold for conversation
-        </Text>
+        {/* Instructions (hide when response is visible) */}
+        {!currentResponse && (
+          <Text
+            variant="bodySmall"
+            color="secondary"
+            center
+            style={styles.instructions}
+            accessibilityLabel="Tap anywhere to describe. Hold for conversation."
+          >
+            Tap to describe • Hold to ask
+          </Text>
+        )}
 
         {/* Main Capture Button */}
-        <Pressable
+        <CaptureButton
           onPress={handleCapture}
           onLongPress={handleLongPress}
-          delayLongPress={500}
-          style={({ pressed }) => [
-            styles.captureButton,
-            pressed && styles.captureButtonPressed,
-          ]}
-          accessibilityLabel={
-            processingState === 'processing'
-              ? 'Processing image'
-              : 'Describe what you see'
-          }
-          accessibilityRole="button"
-          accessibilityHint="Tap to get a description of what the camera sees. Hold to ask questions."
-          accessibilityState={{
-            busy: processingState === 'processing',
-          }}
-        >
-          <View style={styles.captureButtonInner}>
-            <Ionicons
-              name={processingState === 'processing' ? 'sync' : 'eye'}
-              size={32}
-              color={colors.background.primary}
-            />
-            <Text style={styles.captureButtonText}>
-              {processingState === 'processing' ? 'Processing...' : 'Quick Describe'}
-            </Text>
-          </View>
-        </Pressable>
+          onLongPressOut={handleLongPressOut}
+          style={styles.captureButton}
+        />
 
         {/* Mode Selector */}
-        <View style={styles.modeSelector}>
-          <Pressable
-            onPress={() => handleModeChange('read')}
-            style={[
-              styles.modeButton,
-              currentMode === 'read' && styles.modeButtonActive,
-            ]}
-            accessibilityLabel="Read text mode"
-            accessibilityRole="button"
-            accessibilityState={{ selected: currentMode === 'read' }}
-          >
-            <Ionicons
-              name="text"
-              size={24}
-              color={
-                currentMode === 'read'
-                  ? colors.accent.action
-                  : colors.text.secondary
-              }
-            />
-            <Text
-              style={[
-                styles.modeButtonText,
-                currentMode === 'read' && styles.modeButtonTextActive,
-              ]}
-            >
-              Read
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => handleModeChange('navigate')}
-            style={[
-              styles.modeButton,
-              currentMode === 'navigate' && styles.modeButtonActive,
-            ]}
-            accessibilityLabel="Navigate mode"
-            accessibilityRole="button"
-            accessibilityState={{ selected: currentMode === 'navigate' }}
-          >
-            <Ionicons
-              name="walk"
-              size={24}
-              color={
-                currentMode === 'navigate'
-                  ? colors.accent.action
-                  : colors.text.secondary
-              }
-            />
-            <Text
-              style={[
-                styles.modeButtonText,
-                currentMode === 'navigate' && styles.modeButtonTextActive,
-              ]}
-            >
-              Nav
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => handleModeChange('history')}
-            style={styles.modeButton}
-            accessibilityLabel="Conversation history"
-            accessibilityRole="button"
-          >
-            <Ionicons
-              name="chatbubbles-outline"
-              size={24}
-              color={colors.text.secondary}
-            />
-            <Text style={styles.modeButtonText}>Chat</Text>
-          </Pressable>
-        </View>
+        <ModeSelector onModeChange={handleModeChange} style={styles.modeSelector} />
       </View>
     </View>
   );
@@ -246,10 +240,6 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 40,
   },
-  headerTitle: {
-    ...typography.heading,
-    color: colors.text.primary,
-  },
   headerButton: {
     width: 40,
     height: 40,
@@ -261,87 +251,22 @@ const styles = StyleSheet.create({
     margin: layout.screenPadding,
     borderRadius: layout.borderRadius.lg,
     overflow: 'hidden',
-    backgroundColor: colors.background.elevated,
-  },
-  cameraPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    opacity: 0.4,
-  },
-  placeholderText: {
-    ...typography.body,
-    color: colors.text.secondary,
-    marginTop: layout.spacing.md,
   },
   responseContainer: {
     paddingHorizontal: layout.screenPadding,
-    paddingBottom: layout.spacing.md,
-  },
-  responseCard: {
-    backgroundColor: colors.background.elevated,
-    borderRadius: layout.borderRadius.md,
-    padding: layout.spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border.subtle,
-  },
-  responseText: {
-    ...typography.body,
-    color: colors.text.primary,
   },
   bottomControls: {
     paddingHorizontal: layout.screenPadding,
     paddingBottom: layout.spacing.xl,
+    paddingTop: layout.spacing.md,
   },
   instructions: {
-    ...typography.bodySmall,
-    color: colors.text.secondary,
-    textAlign: 'center',
     marginBottom: layout.spacing.md,
   },
   captureButton: {
-    backgroundColor: colors.accent.action,
-    borderRadius: layout.borderRadius.lg,
-    paddingVertical: layout.spacing.lg,
     marginBottom: layout.spacing.lg,
-    minHeight: layout.minTouchTarget,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  captureButtonPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.98 }],
-  },
-  captureButtonInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: layout.spacing.sm,
-  },
-  captureButtonText: {
-    ...typography.button,
-    color: colors.background.primary,
   },
   modeSelector: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  modeButton: {
-    alignItems: 'center',
-    paddingVertical: layout.spacing.sm,
-    paddingHorizontal: layout.spacing.md,
-    borderRadius: layout.borderRadius.md,
-    minWidth: layout.minTouchTarget,
-    minHeight: layout.minTouchTarget,
-  },
-  modeButtonActive: {
-    backgroundColor: colors.background.surface,
-  },
-  modeButtonText: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    marginTop: layout.spacing.xs,
-  },
-  modeButtonTextActive: {
-    color: colors.accent.action,
+    // Uses default styling
   },
 });
