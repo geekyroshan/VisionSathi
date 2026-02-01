@@ -16,13 +16,18 @@ class Settings(BaseSettings):
     api_version: str = "1.0.0"
     debug: bool = False
 
-    # CORS
+    # CORS - includes common development and production origins
     cors_origins: List[str] = [
         "http://localhost:3000",
         "http://localhost:8081",
         "http://localhost:19006",
         "exp://localhost:8081",
+        # Production origins (add your deployed app URLs)
+        "https://*.exp.direct",  # Expo tunnel URLs
     ]
+
+    # Production API URL (for reference in logs)
+    api_base_url: str = "http://localhost:8000"
 
     # Model settings
     moondream_model: str = "vikhyatk/moondream2"

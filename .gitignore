@@ -72,6 +72,11 @@ apps/mobile/assets/models/*.bin
 *.pem
 *.crt
 credentials.json
+google-service-account.json
+*.keystore
+
+# EAS
+.eas/
 
 # Misc
 .cache/
