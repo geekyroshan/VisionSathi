@@ -1,0 +1,26 @@
+## Codebase Patterns
+
+_Add reusable patterns here as you discover them during implementation._
+
+- Use design tokens from `constants/colors.ts` — never hardcode colors
+- All touchable elements must have accessibilityLabel and accessibilityRole
+- Use Zustand stores for state, not React context
+- API responses always include processingMs for monitoring
+- Moondream prompts live in `prompts/` directory, not inline
+
+---
+
+## Progress Log
+
+### 2026-02-01 - Project Initialization
+- Created project structure per design doc
+- Added CLAUDE.md with project patterns
+- Created prd.json with 24 user stories across 4 phases
+- Design document written to docs/plans/
+
+**Learnings:**
+- Monorepo structure with apps/mobile and apps/api
+- Expo Router for navigation (file-based routing)
+- Design tokens critical for accessibility compliance
+
+---

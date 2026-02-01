@@ -1,0 +1,353 @@
+{
+  "name": "VisionSathi",
+  "description": "Offline-first visual assistant app for blind and visually impaired users, powered by Moondream 3",
+  "branchName": "main",
+  "repository": "visionsathi",
+  "userStories": [
+    {
+      "id": "F-1",
+      "title": "Project Setup with Expo",
+      "description": "Initialize React Native project with Expo, TypeScript, and Expo Router. Configure ESLint, Prettier, and basic folder structure.",
+      "acceptanceCriteria": [
+        "Expo dev server starts without errors",
+        "App renders on iOS and Android simulators",
+        "TypeScript configured with strict mode",
+        "ESLint and Prettier configured",
+        "Folder structure matches design doc"
+      ],
+      "phase": 1,
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "F-2",
+      "title": "Design System Foundation",
+      "description": "Create design tokens (colors, typography, spacing) and base UI components (Button, Text, Card, Icon) following the dark-first high-contrast theme.",
+      "acceptanceCriteria": [
+        "colors.ts exports all design tokens",
+        "typography.ts exports font styles",
+        "Button component with accessibility props",
+        "Text component with semantic variants",
+        "All components meet 7:1 contrast ratio"
+      ],
+      "phase": 1,
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "F-3",
+      "title": "Camera Integration",
+      "description": "Implement camera view with expo-camera. Request permissions, show live preview at 40% opacity, capture frames as base64.",
+      "acceptanceCriteria": [
+        "Camera permission requested on first launch",
+        "Live camera preview displayed",
+        "Preview dimmed to 40% opacity",
+        "Frame capture returns base64 image",
+        "Works on both iOS and Android"
+      ],
+      "phase": 1,
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "F-4",
+      "title": "Home Screen Layout",
+      "description": "Build the main home screen with camera preview, capture button (64px+), and mode selector (Read, Nav, Chat shortcuts).",
+      "acceptanceCriteria": [
+        "Camera preview fills main area",
+        "Capture button is 64px minimum",
+        "Mode shortcuts visible at bottom",
+        "All elements have accessibility labels",
+        "Haptic feedback on button tap"
+      ],
+      "phase": 1,
+      "priority": 4,
+      "passes": false
+    },
+    {
+      "id": "F-5",
+      "title": "Accessibility Labels and Roles",
+      "description": "Ensure all interactive elements have proper accessibilityLabel, accessibilityRole, and accessibilityHint. Test with VoiceOver.",
+      "acceptanceCriteria": [
+        "Every button has accessibilityLabel",
+        "Every button has accessibilityRole='button'",
+        "Complex actions have accessibilityHint",
+        "VoiceOver reads all elements correctly",
+        "TalkBack reads all elements correctly"
+      ],
+      "phase": 1,
+      "priority": 5,
+      "passes": false
+    },
+    {
+      "id": "A-1",
+      "title": "FastAPI Backend Setup",
+      "description": "Initialize FastAPI project with health endpoint, CORS configuration, and basic project structure.",
+      "acceptanceCriteria": [
+        "Server starts on port 8000",
+        "/health returns 200 with status",
+        "CORS allows mobile app origin",
+        "Pydantic models configured",
+        "pytest configured with sample test"
+      ],
+      "phase": 2,
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "A-2",
+      "title": "Moondream Integration (Backend)",
+      "description": "Load Moondream 3 model, create /analyze endpoint that accepts base64 image and returns description.",
+      "acceptanceCriteria": [
+        "Moondream 3 loads on server start",
+        "/analyze accepts base64 image",
+        "Returns structured JSON response",
+        "Includes processing time in response",
+        "Handles malformed images gracefully"
+      ],
+      "phase": 2,
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "A-3",
+      "title": "Mobile API Client",
+      "description": "Create API service in mobile app to communicate with FastAPI backend. Handle online/offline detection.",
+      "acceptanceCriteria": [
+        "API client configured with base URL",
+        "analyze() function sends image to backend",
+        "Network status detected correctly",
+        "Timeout after 5 seconds",
+        "Errors handled gracefully"
+      ],
+      "phase": 2,
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "A-4",
+      "title": "Quick Tap Flow (Online)",
+      "description": "Implement end-to-end flow: tap button → capture frame → send to API → display response. Show loading state during processing.",
+      "acceptanceCriteria": [
+        "Tap captures current camera frame",
+        "Loading indicator shows during API call",
+        "Response displayed in ResponseCard",
+        "Error state shown if API fails",
+        "Flow completes in under 5 seconds"
+      ],
+      "phase": 2,
+      "priority": 4,
+      "passes": false
+    },
+    {
+      "id": "A-5",
+      "title": "ONNX Runtime Setup",
+      "description": "Integrate ONNX Runtime Mobile into React Native app. Load quantized Moondream model for on-device inference.",
+      "acceptanceCriteria": [
+        "onnxruntime-react-native installed",
+        "Model loading doesn't block app start",
+        "Inference runs on background thread",
+        "Returns description similar to cloud",
+        "Works in airplane mode"
+      ],
+      "phase": 2,
+      "priority": 5,
+      "passes": false
+    },
+    {
+      "id": "A-6",
+      "title": "Offline Fallback Logic",
+      "description": "Implement decision logic: prefer cloud when online, fallback to local ONNX when offline or on timeout.",
+      "acceptanceCriteria": [
+        "Cloud used when online and enabled",
+        "Local ONNX used when offline",
+        "Fallback triggers after 5s timeout",
+        "User notified of which mode used",
+        "Preference setting respected"
+      ],
+      "phase": 2,
+      "priority": 6,
+      "passes": false
+    },
+    {
+      "id": "V-1",
+      "title": "Text-to-Speech Integration",
+      "description": "Integrate expo-speech for TTS. Automatically speak responses after they arrive. Include pause/resume controls.",
+      "acceptanceCriteria": [
+        "expo-speech installed and configured",
+        "Responses automatically spoken",
+        "Pause button stops speech",
+        "Resume button continues speech",
+        "Repeat button replays response"
+      ],
+      "phase": 3,
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "V-2",
+      "title": "Speech Speed Settings",
+      "description": "Add speech speed control in settings (Slow 0.75x, Normal 1.0x, Fast 1.25x). Persist preference.",
+      "acceptanceCriteria": [
+        "Three speed options available",
+        "Speed affects TTS playback",
+        "Setting persists across sessions",
+        "Default is Normal (1.0x)",
+        "Accessible radio button UI"
+      ],
+      "phase": 3,
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "V-3",
+      "title": "Verbosity Settings",
+      "description": "Add verbosity control (Brief, Normal, Detailed). Affects prompt sent to Moondream for response length.",
+      "acceptanceCriteria": [
+        "Three verbosity options available",
+        "Brief returns 1-2 sentences",
+        "Detailed returns full description",
+        "Setting persists across sessions",
+        "Prompt changes based on setting"
+      ],
+      "phase": 3,
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "V-4",
+      "title": "Conversation Mode (Hold to Talk)",
+      "description": "Implement hold-to-talk: holding button freezes camera, activates STT, captures voice question.",
+      "acceptanceCriteria": [
+        "Long press enters conversation mode",
+        "Camera frame freezes on hold",
+        "Listening UI state shown",
+        "Speech-to-text captures question",
+        "Release sends question for processing"
+      ],
+      "phase": 3,
+      "priority": 4,
+      "passes": false
+    },
+    {
+      "id": "V-5",
+      "title": "Multi-turn Conversation Context",
+      "description": "Maintain conversation context using Moondream's 32k window. Follow-up questions reference previous image/responses.",
+      "acceptanceCriteria": [
+        "Conversation ID tracks session",
+        "History sent with each request",
+        "Follow-ups work without new image",
+        "'What color is it?' works correctly",
+        "Context clears on new image capture"
+      ],
+      "phase": 3,
+      "priority": 5,
+      "passes": false
+    },
+    {
+      "id": "V-6",
+      "title": "Settings Screen",
+      "description": "Build full settings screen with Voice, Processing, and Accessibility sections. All preferences functional.",
+      "acceptanceCriteria": [
+        "Settings accessible from home header",
+        "Voice section: speed, verbosity, voice picker",
+        "Processing section: prefer offline toggle",
+        "Accessibility section: haptics, sounds toggles",
+        "All settings persist correctly"
+      ],
+      "phase": 3,
+      "priority": 6,
+      "passes": false
+    },
+    {
+      "id": "M-1",
+      "title": "Text Reading Mode (OCR)",
+      "description": "Implement Read mode that optimizes for text extraction. Uses OCR-specific prompt, reads text aloud in order.",
+      "acceptanceCriteria": [
+        "Read mode accessible from shortcuts",
+        "OCR-optimized prompt used",
+        "Extracted text displayed clearly",
+        "Text read aloud in reading order",
+        "Works on signs, labels, documents"
+      ],
+      "phase": 4,
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "M-2",
+      "title": "Navigation Assistance Mode",
+      "description": "Implement Navigate mode that focuses on obstacles, paths, and spatial awareness. Structured response with warnings.",
+      "acceptanceCriteria": [
+        "Navigate mode accessible from shortcuts",
+        "Navigation-optimized prompt used",
+        "Obstacles listed with position/distance",
+        "Clear path distance reported",
+        "Warnings spoken first for safety"
+      ],
+      "phase": 4,
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "M-3",
+      "title": "Graceful Degradation UI",
+      "description": "Show clear feedback when falling back to offline mode. Indicate processing source (cloud/local) in response.",
+      "acceptanceCriteria": [
+        "Cloud icon when using cloud",
+        "Device icon when using local",
+        "Toast notification on fallback",
+        "No jarring transition",
+        "Processing time shown for transparency"
+      ],
+      "phase": 4,
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "M-4",
+      "title": "Animations and Transitions",
+      "description": "Add smooth animations: fade transitions between states, pulsing indicators during processing, button press effects.",
+      "acceptanceCriteria": [
+        "Fade transition on screen changes",
+        "Pulsing animation during processing",
+        "Scale animation on button press",
+        "Waveform animation when listening",
+        "Animations respect reduce motion setting"
+      ],
+      "phase": 4,
+      "priority": 4,
+      "passes": false
+    },
+    {
+      "id": "M-5",
+      "title": "Sound Effects",
+      "description": "Add audio feedback sounds: capture click, processing pulse, success chime, error tone. Respects sound setting.",
+      "acceptanceCriteria": [
+        "Capture has soft click sound",
+        "Processing has subtle pulse",
+        "Success has gentle chime",
+        "Error has low tone",
+        "Sounds disabled when setting off"
+      ],
+      "phase": 4,
+      "priority": 5,
+      "passes": false
+    },
+    {
+      "id": "M-6",
+      "title": "Conversation History Screen",
+      "description": "Add history screen showing past conversation sessions. Allow replay of previous responses.",
+      "acceptanceCriteria": [
+        "History accessible from mode shortcuts",
+        "Past sessions listed with date/time",
+        "Tap session shows conversation",
+        "Replay button speaks responses",
+        "Delete session option available"
+      ],
+      "phase": 4,
+      "priority": 6,
+      "passes": false
+    }
+  ]
+}
