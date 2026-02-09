@@ -48,18 +48,16 @@ async def analyze_image(request: AnalyzeRequest):
 
     moondream = get_moondream()
 
-    # Check if model is loaded
-    if not moondream.is_loaded():
-        # Try to load model on first request
-        if not moondream.load_model():
-            raise HTTPException(
-                status_code=503,
-                detail="Model not available. Please try again later."
-            )
+    # Check if Ollama model is available
+    if not await moondream.is_loaded():
+        raise HTTPException(
+            status_code=503,
+            detail="Model not available. Make sure Ollama is running with the moondream model pulled."
+        )
 
     try:
-        # Decode image
-        image = moondream.decode_image(request.image)
+        # Decode image: strip data URL prefix, get raw base64
+        image_base64 = moondream.decode_image(request.image)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
 
@@ -67,8 +65,10 @@ async def analyze_image(request: AnalyzeRequest):
     prompt = get_prompt_for_mode(request.mode, request.verbosity)
 
     try:
-        # Run inference
-        description, confidence, processing_ms = moondream.analyze(image, prompt)
+        # Run inference via Ollama
+        description, confidence, processing_ms = await moondream.analyze(
+            image_base64, prompt
+        )
 
         # Extract detected objects (simple heuristic)
         words = description.lower().split()

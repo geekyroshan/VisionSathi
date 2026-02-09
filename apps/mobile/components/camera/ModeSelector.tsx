@@ -1,14 +1,14 @@
 /**
  * VisionSathi - ModeSelector Component
  *
- * Mode shortcuts: Read, Navigate, History.
+ * Frosted glass pill mode selector with icons.
+ * Active state uses teal background, inactive uses glass border.
  */
 
 import React, { useCallback } from 'react';
 import { View, Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
-import { typography } from '@/constants/typography';
 import { layout } from '@/constants';
 import { triggerHaptic } from '@/constants/haptics';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -66,13 +66,17 @@ export function ModeSelector({ onModeChange, style }: ModeSelectorProps) {
   return (
     <View style={[styles.container, style]}>
       {modes.map((option) => {
-        const isActive = option.mode !== 'history' && option.mode === currentMode;
+        const isActive =
+          option.mode !== 'history' && option.mode === currentMode;
 
         return (
           <Pressable
             key={option.mode}
             onPress={() => handleModePress(option.mode)}
-            style={[styles.modeButton, isActive && styles.modeButtonActive]}
+            style={[
+              styles.modePill,
+              isActive ? styles.modePillActive : styles.modePillInactive,
+            ]}
             accessibilityRole="button"
             accessibilityLabel={`${option.label} mode`}
             accessibilityHint={option.hint}
@@ -80,13 +84,16 @@ export function ModeSelector({ onModeChange, style }: ModeSelectorProps) {
           >
             <Ionicons
               name={option.icon}
-              size={24}
-              color={isActive ? colors.accent.action : colors.text.secondary}
+              size={20}
+              color={
+                isActive ? colors.background.primary : colors.text.secondary
+              }
             />
             <Text
               variant="caption"
-              color={isActive ? 'accent' : 'secondary'}
-              style={styles.modeLabel}
+              style={
+                isActive ? styles.modeLabelActive : styles.modeLabelInactive
+              }
             >
               {option.label}
             </Text>
@@ -100,21 +107,34 @@ export function ModeSelector({ onModeChange, style }: ModeSelectorProps) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+    gap: layout.spacing.sm,
   },
-  modeButton: {
+  modePill: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     paddingVertical: layout.spacing.sm,
     paddingHorizontal: layout.spacing.md,
-    borderRadius: layout.borderRadius.md,
+    borderRadius: layout.borderRadius.full,
     minWidth: layout.minTouchTarget,
-    minHeight: layout.minTouchTarget,
+    minHeight: 44,
     justifyContent: 'center',
+    borderWidth: 1,
   },
-  modeButtonActive: {
-    backgroundColor: colors.background.surface,
+  modePillActive: {
+    backgroundColor: colors.accent.action,
+    borderColor: colors.accent.action,
   },
-  modeLabel: {
-    marginTop: layout.spacing.xs,
+  modePillInactive: {
+    backgroundColor: colors.glass.background,
+    borderColor: colors.glass.border,
+  },
+  modeLabelActive: {
+    color: colors.background.primary,
+    fontWeight: '600',
+  },
+  modeLabelInactive: {
+    color: colors.text.secondary,
   },
 });

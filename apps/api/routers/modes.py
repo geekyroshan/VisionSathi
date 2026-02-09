@@ -56,22 +56,23 @@ async def read_text(request: ReadRequest):
 
     moondream = get_moondream()
 
-    if not moondream.is_loaded():
-        if not moondream.load_model():
-            raise HTTPException(
-                status_code=503,
-                detail="Model not available."
-            )
+    if not await moondream.is_loaded():
+        raise HTTPException(
+            status_code=503,
+            detail="Model not available. Make sure Ollama is running with the moondream model pulled."
+        )
 
     try:
-        image = moondream.decode_image(request.image)
+        image_base64 = moondream.decode_image(request.image)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
 
     prompt = get_prompt_for_mode("read", request.verbosity)
 
     try:
-        text, confidence, processing_ms = moondream.analyze(image, prompt)
+        text, confidence, processing_ms = await moondream.analyze(
+            image_base64, prompt
+        )
 
         # Parse response into text blocks (simple heuristic)
         lines = text.strip().split("\n")
@@ -171,22 +172,23 @@ async def analyze_for_navigation(request: NavigateRequest):
 
     moondream = get_moondream()
 
-    if not moondream.is_loaded():
-        if not moondream.load_model():
-            raise HTTPException(
-                status_code=503,
-                detail="Model not available."
-            )
+    if not await moondream.is_loaded():
+        raise HTTPException(
+            status_code=503,
+            detail="Model not available. Make sure Ollama is running with the moondream model pulled."
+        )
 
     try:
-        image = moondream.decode_image(request.image)
+        image_base64 = moondream.decode_image(request.image)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
 
     prompt = get_prompt_for_mode("navigate", request.verbosity)
 
     try:
-        response_text, confidence, processing_ms = moondream.analyze(image, prompt)
+        response_text, confidence, processing_ms = await moondream.analyze(
+            image_base64, prompt
+        )
 
         # Parse response for structured data (heuristics)
         response_lower = response_text.lower()

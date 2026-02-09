@@ -5,6 +5,7 @@
  */
 
 import Constants from 'expo-constants';
+import { useSettingsStore } from '@/stores/settingsStore';
 import type {
   AnalyzeRequest,
   AnalyzeResponse,
@@ -13,7 +14,16 @@ import type {
   NavigationResponse,
 } from '../../../packages/shared/types';
 
-const API_BASE_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:8000';
+// Dynamic API URL - checks settings store first
+function getApiUrl(): string {
+  // Try settings store (user-configured URL)
+  const settingsUrl = useSettingsStore.getState().serverUrl;
+  if (settingsUrl) return settingsUrl;
+
+  // Fall back to env var
+  return Constants.expoConfig?.extra?.apiUrl || 'http://localhost:8000';
+}
+
 const TIMEOUT_MS = 30000; // 30 seconds - Moondream inference can take time
 
 /**
@@ -63,7 +73,7 @@ async function fetchWithTimeout(
 export async function checkHealth(): Promise<boolean> {
   try {
     const response = await fetchWithTimeout(
-      `${API_BASE_URL}/health`,
+      `${getApiUrl()}/health`,
       { method: 'GET' },
       3000
     );
@@ -80,7 +90,7 @@ export async function analyzeImage(
   request: AnalyzeRequest
 ): Promise<AnalyzeResponse> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/analyze`, {
+    const response = await fetchWithTimeout(`${getApiUrl()}/analyze`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -114,7 +124,7 @@ export async function sendConversation(
   request: ConversationRequest
 ): Promise<ConversationResponse> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/conversation`, {
+    const response = await fetchWithTimeout(`${getApiUrl()}/conversation`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -149,7 +159,7 @@ export async function readText(
   verbosity: 'brief' | 'normal' | 'detailed' = 'normal'
 ): Promise<{ text: string; textBlocks: any[]; processingMs: number }> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/modes/read`, {
+    const response = await fetchWithTimeout(`${getApiUrl()}/modes/read`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -178,7 +188,7 @@ export async function analyzeForNavigation(
   verbosity: 'brief' | 'normal' | 'detailed' = 'normal'
 ): Promise<NavigationResponse> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/modes/navigate`, {
+    const response = await fetchWithTimeout(`${getApiUrl()}/modes/navigate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

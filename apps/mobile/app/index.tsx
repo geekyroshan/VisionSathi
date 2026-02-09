@@ -1,11 +1,13 @@
 /**
  * VisionSathi - Home Screen
  *
- * Main camera view with capture button and mode selector.
+ * Full-bleed camera view with glassmorphism overlays.
+ * Premium glassmorphism design with floating glass controls.
  */
 
-import React, { useCallback, useRef } from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
+import { View, StyleSheet, Pressable, StatusBar as RNStatusBar } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { CameraView as ExpoCameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,8 +19,9 @@ import { useVisionStore } from '@/stores/visionStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTTS } from '@/hooks/useTTS';
 import { useVision } from '@/hooks/useVision';
+import { checkHealth } from '@/services/api';
 
-import { Text } from '@/components/ui';
+import { Text, GlassCard, StatusBar } from '@/components/ui';
 import { CameraView, CaptureButton, ModeSelector } from '@/components/camera';
 import { ResponseCard } from '@/components/response';
 
@@ -26,7 +29,11 @@ import type { AppMode } from '../../../packages/shared/types';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const cameraRef = useRef<ExpoCameraView>(null);
+
+  // Connection state
+  const [isConnected, setIsConnected] = useState(false);
 
   // Store state
   const {
@@ -49,6 +56,17 @@ export default function HomeScreen() {
     enterConversationMode,
     exitConversationMode,
   } = useVision(cameraRef);
+
+  // Connection health check
+  useEffect(() => {
+    const check = async () => {
+      const healthy = await checkHealth();
+      setIsConnected(healthy);
+    };
+    check();
+    const interval = setInterval(check, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Mode change handler
   const handleModeChange = useCallback(
@@ -89,49 +107,10 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerSpacer} />
-        <Text variant="heading" accessibilityRole="header">
-          VisionSathi
-        </Text>
-        <Pressable
-          onPress={handleSettingsPress}
-          style={styles.headerButton}
-          accessibilityLabel="Settings"
-          accessibilityRole="button"
-          accessibilityHint="Opens settings screen"
-        >
-          <Ionicons
-            name="settings-outline"
-            size={24}
-            color={colors.text.primary}
-          />
-        </Pressable>
-      </View>
+      <RNStatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Processing State Indicator */}
-      {processingState !== 'idle' && (
-        <View style={styles.stateIndicator}>
-          <View
-            style={[
-              styles.stateIndicatorDot,
-              processingState === 'listening' && styles.stateIndicatorListening,
-              processingState === 'processing' && styles.stateIndicatorProcessing,
-              processingState === 'speaking' && styles.stateIndicatorSpeaking,
-            ]}
-          />
-          <Text variant="caption" color="secondary">
-            {processingState === 'capturing' && 'Capturing...'}
-            {processingState === 'listening' && 'Listening...'}
-            {processingState === 'processing' && 'Processing...'}
-            {processingState === 'speaking' && 'Speaking...'}
-          </Text>
-        </View>
-      )}
-
-      {/* Camera Preview */}
-      <View style={styles.cameraContainer}>
+      {/* Full-bleed Camera Preview (edge-to-edge) */}
+      <View style={styles.cameraFullBleed}>
         <CameraView cameraRef={cameraRef} />
 
         {/* Listening Overlay */}
@@ -154,23 +133,81 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Response Card */}
-      {currentResponse && processingState !== 'listening' && (
-        <View style={styles.responseContainer}>
-          <ResponseCard
-            text={currentResponse.description}
-            processingMs={currentResponse.processingMs}
-            source={lastProcessingSource || 'cloud'}
-            isSpeaking={isSpeaking && !isPaused}
-            onToggleSpeech={handleToggleSpeech}
-            onRepeat={handleRepeat}
-            onFollowUp={handleFollowUp}
+      {/* Glass Header Overlay */}
+      <View
+        style={[
+          styles.headerOverlay,
+          { paddingTop: insets.top + layout.spacing.xs },
+        ]}
+      >
+        <StatusBar isConnected={isConnected} />
+
+        {/* Settings button */}
+        <Pressable
+          onPress={handleSettingsPress}
+          style={styles.settingsButton}
+          accessibilityLabel="Settings"
+          accessibilityRole="button"
+          accessibilityHint="Opens settings screen"
+        >
+          <Ionicons
+            name="settings-outline"
+            size={22}
+            color={colors.text.primary}
           />
+        </Pressable>
+      </View>
+
+      {/* Processing State Indicator */}
+      {processingState !== 'idle' && processingState !== 'listening' && (
+        <View
+          style={[
+            styles.processingIndicator,
+            { top: insets.top + 60 },
+          ]}
+        >
+          <GlassCard intensity="strong" padding="small">
+            <View style={styles.processingContent}>
+              <View
+                style={[
+                  styles.processingDot,
+                  processingState === 'processing' && styles.processingDotAmber,
+                  processingState === 'speaking' && styles.processingDotGreen,
+                  processingState === 'capturing' && styles.processingDotTeal,
+                ]}
+              />
+              <Text variant="caption" color="secondary">
+                {processingState === 'capturing' && 'Capturing...'}
+                {processingState === 'processing' && 'Processing...'}
+                {processingState === 'speaking' && 'Speaking...'}
+              </Text>
+            </View>
+          </GlassCard>
         </View>
       )}
 
-      {/* Bottom Controls */}
-      <View style={styles.bottomControls}>
+      {/* Bottom Glass Overlay */}
+      <View
+        style={[
+          styles.bottomOverlay,
+          { paddingBottom: insets.bottom + layout.spacing.sm },
+        ]}
+      >
+        {/* Response Card (floating glass) */}
+        {currentResponse && processingState !== 'listening' && (
+          <View style={styles.responseContainer}>
+            <ResponseCard
+              text={currentResponse.description}
+              processingMs={currentResponse.processingMs}
+              source={lastProcessingSource || 'cloud'}
+              isSpeaking={isSpeaking && !isPaused}
+              onToggleSpeech={handleToggleSpeech}
+              onRepeat={handleRepeat}
+              onFollowUp={handleFollowUp}
+            />
+          </View>
+        )}
+
         {/* Instructions (hide when response is visible or listening) */}
         {!currentResponse && processingState === 'idle' && (
           <Text
@@ -180,7 +217,7 @@ export default function HomeScreen() {
             style={styles.instructions}
             accessibilityLabel="Tap to describe what you see. Hold to ask questions."
           >
-            Tap to describe • Hold to ask
+            Tap to describe  --  Hold to ask
           </Text>
         )}
 
@@ -204,50 +241,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background.primary,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: layout.screenPadding,
-    paddingVertical: layout.spacing.sm,
-    height: layout.headerHeight,
-  },
-  headerSpacer: {
-    width: 40,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stateIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: layout.spacing.sm,
-    paddingVertical: layout.spacing.sm,
-  },
-  stateIndicatorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.accent.action,
-  },
-  stateIndicatorListening: {
-    backgroundColor: colors.accent.listening,
-  },
-  stateIndicatorProcessing: {
-    backgroundColor: colors.accent.warning,
-  },
-  stateIndicatorSpeaking: {
-    backgroundColor: colors.accent.success,
-  },
-  cameraContainer: {
-    flex: 1,
-    margin: layout.screenPadding,
-    borderRadius: layout.borderRadius.lg,
-    overflow: 'hidden',
+
+  // Full-bleed camera
+  cameraFullBleed: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   listeningOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -262,21 +263,79 @@ const styles = StyleSheet.create({
   listeningText: {
     color: colors.accent.listening,
   },
-  responseContainer: {
-    paddingHorizontal: layout.screenPadding,
+
+  // Header overlay
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(10, 10, 11, 0.5)',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
+    zIndex: 10,
   },
-  bottomControls: {
-    paddingHorizontal: layout.screenPadding,
-    paddingBottom: layout.spacing.xl,
+  settingsButton: {
+    position: 'absolute',
+    right: layout.spacing.md,
+    top: 0,
+    bottom: 0,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Processing indicator
+  processingIndicator: {
+    position: 'absolute',
+    alignSelf: 'center',
+    zIndex: 10,
+  },
+  processingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: layout.spacing.sm,
+  },
+  processingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent.action,
+  },
+  processingDotAmber: {
+    backgroundColor: colors.accent.warning,
+  },
+  processingDotGreen: {
+    backgroundColor: colors.accent.success,
+  },
+  processingDotTeal: {
+    backgroundColor: colors.accent.action,
+  },
+
+  // Bottom overlay
+  bottomOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(10, 10, 11, 0.6)',
+    borderTopWidth: 1,
+    borderTopColor: colors.glass.border,
     paddingTop: layout.spacing.md,
+    paddingHorizontal: layout.screenPadding,
+    zIndex: 10,
+  },
+  responseContainer: {
+    marginBottom: layout.spacing.md,
   },
   instructions: {
     marginBottom: layout.spacing.md,
   },
   captureButton: {
-    marginBottom: layout.spacing.lg,
+    marginBottom: layout.spacing.md,
   },
   modeSelector: {
-    // Uses default styling
+    marginBottom: layout.spacing.xs,
   },
 });

@@ -16,23 +16,15 @@ class Settings(BaseSettings):
     api_version: str = "1.0.0"
     debug: bool = False
 
-    # CORS - includes common development and production origins
-    cors_origins: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:8081",
-        "http://localhost:19006",
-        "exp://localhost:8081",
-        # Production origins (add your deployed app URLs)
-        "https://*.exp.direct",  # Expo tunnel URLs
-    ]
+    # CORS - allow all origins for dev (mobile + local network)
+    cors_origins: List[str] = ["*"]
 
     # Production API URL (for reference in logs)
     api_base_url: str = "http://localhost:8000"
 
-    # Model settings
-    moondream_model: str = "vikhyatk/moondream2"
-    moondream_device: str = "mps"  # "cuda", "mps" (Apple Silicon), or "cpu"
-    moondream_dtype: str = "float32"  # float16 not well supported on MPS/CPU
+    # Ollama settings
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "moondream"
 
     # Cache settings
     cache_enabled: bool = True

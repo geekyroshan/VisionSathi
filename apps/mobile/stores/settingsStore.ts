@@ -10,6 +10,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { UserPreferences } from '../../../packages/shared/types';
 
 interface SettingsState extends UserPreferences {
+  // Server configuration
+  serverUrl: string;
+
+  // Onboarding
+  hasCompletedOnboarding: boolean;
+
   // Actions
   setSpeechSpeed: (speed: 0.75 | 1.0 | 1.25) => void;
   setVerbosity: (verbosity: 'brief' | 'normal' | 'detailed') => void;
@@ -19,10 +25,12 @@ interface SettingsState extends UserPreferences {
   setHapticEnabled: (enabled: boolean) => void;
   setSoundEnabled: (enabled: boolean) => void;
   setHighContrast: (enabled: boolean) => void;
+  setServerUrl: (url: string) => void;
+  setHasCompletedOnboarding: (completed: boolean) => void;
   resetToDefaults: () => void;
 }
 
-const defaultSettings: UserPreferences = {
+const defaultSettings: UserPreferences & { serverUrl: string; hasCompletedOnboarding: boolean } = {
   speechSpeed: 1.0,
   verbosity: 'normal',
   voiceId: 'default',
@@ -31,6 +39,8 @@ const defaultSettings: UserPreferences = {
   hapticEnabled: true,
   soundEnabled: true,
   highContrast: true,
+  serverUrl: '',
+  hasCompletedOnboarding: false,
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -46,6 +56,8 @@ export const useSettingsStore = create<SettingsState>()(
       setHapticEnabled: (enabled) => set({ hapticEnabled: enabled }),
       setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
       setHighContrast: (enabled) => set({ highContrast: enabled }),
+      setServerUrl: (url) => set({ serverUrl: url }),
+      setHasCompletedOnboarding: (completed) => set({ hasCompletedOnboarding: completed }),
       resetToDefaults: () => set(defaultSettings),
     }),
     {

@@ -1,25 +1,26 @@
 /**
  * VisionSathi - CaptureButton Component
  *
- * Main action button with tap and long-press support.
+ * Circular glassmorphism action button with animated glow ring.
+ * Uses react-native-reanimated for smooth glow and spin animations.
  */
 
-import React, { useCallback, useState } from 'react';
-import {
-  Pressable,
-  View,
-  StyleSheet,
-  Animated,
-  ViewStyle,
-} from 'react-native';
+import React, { useEffect } from 'react';
+import { Pressable, StyleSheet, ViewStyle } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSpring,
+  withSequence,
+  Easing,
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
-import { typography } from '@/constants/typography';
-import { layout } from '@/constants';
 import { triggerHaptic } from '@/constants/haptics';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useVisionStore } from '@/stores/visionStore';
-import { Text } from '@/components/ui';
 
 interface CaptureButtonProps {
   /** Called on single tap */
@@ -38,75 +39,121 @@ export function CaptureButton({
   onLongPressOut,
   style,
 }: CaptureButtonProps) {
-  const [isLongPressing, setIsLongPressing] = useState(false);
-  const scaleAnim = React.useRef(new Animated.Value(1)).current;
-
   const hapticEnabled = useSettingsStore((state) => state.hapticEnabled);
   const processingState = useVisionStore((state) => state.processingState);
 
   const isProcessing = processingState === 'processing';
   const isListening = processingState === 'listening';
 
-  const handlePressIn = useCallback(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.95,
-      useNativeDriver: true,
-    }).start();
-  }, [scaleAnim]);
+  const scale = useSharedValue(1);
+  const glowOpacity = useSharedValue(0.4);
+  const rotation = useSharedValue(0);
 
-  const handlePressOut = useCallback(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
+  // Pulsing glow animation based on state
+  useEffect(() => {
+    if (isProcessing) {
+      // Spinning + fast pulse for processing
+      rotation.value = withRepeat(
+        withTiming(360, { duration: 1500, easing: Easing.linear }),
+        -1,
+        false
+      );
+      glowOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.8, { duration: 600 }),
+          withTiming(0.3, { duration: 600 })
+        ),
+        -1,
+        true
+      );
+    } else if (isListening) {
+      // Fast pulse for listening, no spin
+      glowOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.9, { duration: 400 }),
+          withTiming(0.3, { duration: 400 })
+        ),
+        -1,
+        true
+      );
+      rotation.value = withTiming(0, { duration: 200 });
+    } else {
+      // Gentle breathing glow when idle
+      glowOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.6, { duration: 1500 }),
+          withTiming(0.2, { duration: 1500 })
+        ),
+        -1,
+        true
+      );
+      rotation.value = withTiming(0, { duration: 200 });
+    }
+  }, [isProcessing, isListening, rotation, glowOpacity]);
 
-    if (isLongPressing) {
-      setIsLongPressing(false);
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+    transform: [{ scale: 1.3 }],
+  }));
+
+  const buttonAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
+  // Determine active colors based on state
+  const activeColor = isProcessing
+    ? colors.accent.warning
+    : isListening
+    ? colors.accent.listening
+    : colors.accent.action;
+
+  const activeGlow = isProcessing
+    ? colors.glow.warning
+    : isListening
+    ? colors.glow.listening
+    : colors.glow.action;
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.92);
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1);
+    if (isListening) {
       onLongPressOut?.();
     }
-  }, [scaleAnim, isLongPressing, onLongPressOut]);
+  };
 
-  const handlePress = useCallback(() => {
+  const handlePress = () => {
     if (!isProcessing && !isListening) {
       triggerHaptic('tap', hapticEnabled);
       onPress();
     }
-  }, [isProcessing, isListening, hapticEnabled, onPress]);
-
-  const handleLongPress = useCallback(() => {
-    if (!isProcessing) {
-      triggerHaptic('heavy', hapticEnabled);
-      setIsLongPressing(true);
-      onLongPress?.();
-    }
-  }, [isProcessing, hapticEnabled, onLongPress]);
-
-  const getButtonContent = () => {
-    if (isProcessing) {
-      return {
-        icon: 'sync' as const,
-        text: 'Processing...',
-        color: colors.accent.warning,
-      };
-    }
-    if (isListening) {
-      return {
-        icon: 'mic' as const,
-        text: 'Listening...',
-        color: colors.accent.listening,
-      };
-    }
-    return {
-      icon: 'eye' as const,
-      text: 'Quick Describe',
-      color: colors.accent.action,
-    };
   };
 
-  const content = getButtonContent();
+  const handleLongPress = () => {
+    if (!isProcessing) {
+      triggerHaptic('heavy', hapticEnabled);
+      onLongPress?.();
+    }
+  };
 
   return (
-    <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, style]}>
+    <Animated.View style={[styles.wrapper, buttonAnimatedStyle, style]}>
+      {/* Outer glow ring */}
+      <Animated.View
+        style={[
+          styles.glowRing,
+          glowStyle,
+          { backgroundColor: activeGlow, borderColor: activeColor },
+        ]}
+      />
+
+      {/* Main button */}
       <Pressable
         onPress={handlePress}
         onLongPress={handleLongPress}
@@ -114,11 +161,7 @@ export function CaptureButton({
         onPressOut={handlePressOut}
         delayLongPress={500}
         disabled={isProcessing}
-        style={[
-          styles.button,
-          { backgroundColor: content.color },
-          isProcessing && styles.buttonProcessing,
-        ]}
+        style={[styles.button, { backgroundColor: activeColor }]}
         accessibilityRole="button"
         accessibilityLabel={
           isProcessing
@@ -136,58 +179,49 @@ export function CaptureButton({
           busy: isProcessing || isListening,
         }}
       >
-        <View style={styles.buttonContent}>
+        {isProcessing ? (
+          <Animated.View style={spinStyle}>
+            <Ionicons
+              name="sync"
+              size={32}
+              color={colors.background.primary}
+            />
+          </Animated.View>
+        ) : (
           <Ionicons
-            name={content.icon}
+            name={isListening ? 'mic' : 'eye'}
             size={32}
             color={colors.background.primary}
-            style={isProcessing ? styles.spinningIcon : undefined}
           />
-          <Text
-            variant="body"
-            style={styles.buttonText}
-          >
-            {content.text}
-          </Text>
-        </View>
+        )}
       </Pressable>
-      <Text
-        variant="caption"
-        color="secondary"
-        center
-        style={styles.hint}
-      >
-        {isListening ? 'Release to send' : 'Tap or hold'}
-      </Text>
     </Animated.View>
   );
 }
 
+const BUTTON_SIZE = 80;
+const GLOW_SIZE = BUTTON_SIZE + 24;
+
 const styles = StyleSheet.create({
-  button: {
-    borderRadius: layout.borderRadius.lg,
-    paddingVertical: layout.spacing.lg,
-    paddingHorizontal: layout.spacing.xl,
-    minHeight: layout.minTouchTarget,
+  wrapper: {
+    width: GLOW_SIZE,
+    height: GLOW_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
   },
-  buttonProcessing: {
-    opacity: 0.8,
+  glowRing: {
+    position: 'absolute',
+    width: GLOW_SIZE,
+    height: GLOW_SIZE,
+    borderRadius: GLOW_SIZE / 2,
+    borderWidth: 2,
   },
-  buttonContent: {
-    flexDirection: 'row',
+  button: {
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+    borderRadius: BUTTON_SIZE / 2,
     alignItems: 'center',
-    gap: layout.spacing.sm,
-  },
-  buttonText: {
-    ...typography.button,
-    color: colors.background.primary,
-  },
-  spinningIcon: {
-    // Animation handled separately if needed
-  },
-  hint: {
-    marginTop: layout.spacing.sm,
+    justifyContent: 'center',
   },
 });

@@ -14,7 +14,7 @@ import { useVisionStore } from '@/stores/visionStore';
 
 interface CameraViewProps {
   /** Reference to camera for capture */
-  cameraRef: React.RefObject<ExpoCameraView>;
+  cameraRef: React.RefObject<ExpoCameraView | null>;
   /** Called when camera is ready */
   onReady?: () => void;
 }

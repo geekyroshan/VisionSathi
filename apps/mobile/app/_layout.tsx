@@ -2,18 +2,26 @@
  * VisionSathi - Root Layout
  *
  * App-wide providers and navigation setup.
+ * Conditionally routes to onboarding for first-time users.
  */
 
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import { colors } from '@/constants/colors';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const router = useRouter();
+  const segments = useSegments();
+  const hasCompletedOnboarding = useSettingsStore(
+    (state) => state.hasCompletedOnboarding
+  );
+
   useEffect(() => {
     // Hide splash screen after app is ready
     const prepare = async () => {
@@ -23,6 +31,17 @@ export default function RootLayout() {
 
     prepare();
   }, []);
+
+  useEffect(() => {
+    // Redirect to onboarding if not completed, or away from it if completed
+    const currentSegment = segments[0];
+
+    if (!hasCompletedOnboarding && (currentSegment as string) !== 'onboarding') {
+      router.replace('/onboarding' as any);
+    } else if (hasCompletedOnboarding && (currentSegment as string) === 'onboarding') {
+      router.replace('/');
+    }
+  }, [hasCompletedOnboarding, segments, router]);
 
   return (
     <>
@@ -47,7 +66,14 @@ export default function RootLayout() {
           name="index"
           options={{
             title: 'VisionSathi',
-            headerShown: true,
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="onboarding"
+          options={{
+            title: 'Welcome',
+            headerShown: false,
           }}
         />
         <Stack.Screen

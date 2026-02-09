@@ -1,32 +1,27 @@
 """
-VisionSathi - Moondream Service
+VisionSathi - Moondream Service (Ollama Backend)
 
-Handles Moondream model loading and inference.
+Handles image analysis via Ollama HTTP API running Moondream model.
 """
 
-import base64
 import time
-from io import BytesIO
-from typing import Optional, Tuple
-from PIL import Image
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from typing import Optional, Tuple, List, Dict
+
+import httpx
 
 from config import settings
 
 
 class MoondreamService:
-    """Service for Moondream vision-language model inference."""
+    """Service for Moondream vision-language model inference via Ollama."""
 
     _instance: Optional["MoondreamService"] = None
-    _model = None
-    _tokenizer = None
-    _device: str = "cpu"
-    _loaded: bool = False
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
+            cls._instance._ollama_url = settings.ollama_url
+            cls._instance._model_name = settings.ollama_model
         return cls._instance
 
     @classmethod
@@ -36,158 +31,151 @@ class MoondreamService:
             cls._instance = cls()
         return cls._instance
 
-    def load_model(self) -> bool:
-        """Load Moondream model into memory."""
-        if self._loaded:
-            return True
-
+    async def is_loaded(self) -> bool:
+        """Check if Ollama is running and has the Moondream model available."""
         try:
-            print(f"Loading Moondream model: {settings.moondream_model}")
-            print(f"Device: {settings.moondream_device}")
-
-            # Determine device
-            if settings.moondream_device == "cuda" and torch.cuda.is_available():
-                self._device = "cuda"
-            elif settings.moondream_device == "mps" and torch.backends.mps.is_available():
-                self._device = "mps"
-            else:
-                self._device = "cpu"
-
-            print(f"Using device: {self._device}")
-
-            # Load model with appropriate dtype
-            dtype = torch.float16 if settings.moondream_dtype == "float16" and self._device != "cpu" else torch.float32
-
-            self._model = AutoModelForCausalLM.from_pretrained(
-                settings.moondream_model,
-                trust_remote_code=True,
-                torch_dtype=dtype,
-                device_map={"": self._device} if self._device != "cpu" else None,
-            )
-
-            if self._device == "cpu":
-                self._model = self._model.to(self._device)
-
-            self._tokenizer = AutoTokenizer.from_pretrained(
-                settings.moondream_model,
-                trust_remote_code=True,
-            )
-
-            self._loaded = True
-            print("Moondream model loaded successfully!")
-            return True
-
-        except Exception as e:
-            print(f"Failed to load Moondream model: {e}")
-            self._loaded = False
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{self._ollama_url}/api/tags")
+                response.raise_for_status()
+                data = response.json()
+                models = data.get("models", [])
+                return any(
+                    self._model_name in m.get("name", "")
+                    for m in models
+                )
+        except Exception:
             return False
 
-    def is_loaded(self) -> bool:
-        """Check if model is loaded."""
-        return self._loaded
+    def decode_image(self, base64_string: str) -> str:
+        """
+        Strip data URL prefix from base64 image string.
 
-    def decode_image(self, base64_string: str) -> Image.Image:
-        """Decode base64 image string to PIL Image."""
-        # Remove data URL prefix if present
+        Returns the raw base64 string suitable for Ollama API.
+        """
         if "," in base64_string:
-            base64_string = base64_string.split(",")[1]
+            base64_string = base64_string.split(",", 1)[1]
+        return base64_string
 
-        image_bytes = base64.b64decode(base64_string)
-        image = Image.open(BytesIO(image_bytes))
-        return image.convert("RGB")
-
-    def analyze(
+    async def analyze(
         self,
-        image: Image.Image,
+        image_base64: str,
         prompt: str,
     ) -> Tuple[str, float, int]:
         """
-        Analyze image with given prompt.
+        Analyze image with given prompt via Ollama.
+
+        Args:
+            image_base64: Base64-encoded image string (no data URL prefix).
+            prompt: The text prompt describing what to analyze.
 
         Returns:
             Tuple of (description, confidence, processing_ms)
         """
-        if not self._loaded:
-            raise RuntimeError("Model not loaded. Call load_model() first.")
-
         start_time = time.time()
 
         try:
-            # Encode image
-            enc_image = self._model.encode_image(image)
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    f"{self._ollama_url}/api/chat",
+                    json={
+                        "model": self._model_name,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": prompt,
+                                "images": [image_base64],
+                            }
+                        ],
+                        "stream": False,
+                    },
+                )
+                response.raise_for_status()
+                result = response.json()
+                description = result["message"]["content"]
+                processing_ms = int((time.time() - start_time) * 1000)
 
-            # Generate response
-            response = self._model.answer_question(
-                enc_image,
-                prompt,
-                self._tokenizer,
-            )
+                # Estimate confidence based on response length and coherence
+                confidence = min(0.95, 0.7 + len(description.split()) * 0.01)
 
+                return description, confidence, processing_ms
+
+        except httpx.HTTPStatusError as e:
             processing_ms = int((time.time() - start_time) * 1000)
-
-            # Estimate confidence based on response length and coherence
-            confidence = min(0.95, 0.7 + len(response.split()) * 0.01)
-
-            return response, confidence, processing_ms
-
+            raise RuntimeError(
+                f"Ollama API error (HTTP {e.response.status_code}): {e.response.text}"
+            )
+        except httpx.ConnectError:
+            raise RuntimeError(
+                f"Cannot connect to Ollama at {self._ollama_url}. "
+                "Make sure Ollama is running (ollama serve)."
+            )
         except Exception as e:
             processing_ms = int((time.time() - start_time) * 1000)
             raise RuntimeError(f"Inference failed: {e}")
 
-    def analyze_with_context(
+    async def analyze_with_context(
         self,
-        image: Optional[Image.Image],
+        image_base64: Optional[str],
         prompt: str,
-        history: list,
+        history: List[Dict[str, str]],
     ) -> Tuple[str, float, int]:
         """
-        Analyze with conversation context.
+        Analyze with conversation context via Ollama chat API.
 
         Args:
-            image: Optional new image (None for follow-ups)
-            prompt: Current user question
-            history: Previous conversation messages
+            image_base64: Optional base64 image (None for text-only follow-ups).
+            prompt: Current user question.
+            history: Previous conversation messages as list of
+                     {"role": "user"|"assistant", "content": "..."} dicts.
 
         Returns:
             Tuple of (response, confidence, processing_ms)
         """
-        if not self._loaded:
-            raise RuntimeError("Model not loaded. Call load_model() first.")
-
         start_time = time.time()
 
         try:
-            # Build context prompt
-            context_parts = []
+            # Build messages array from history
+            messages: List[dict] = []
             for msg in history[-10:]:  # Last 10 messages for context
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
                 if content and content != "[image]":
-                    context_parts.append(f"{role}: {content}")
+                    messages.append({"role": role, "content": content})
 
-            context_parts.append(f"user: {prompt}")
-            full_prompt = "\n".join(context_parts)
+            # Add current user message with image if available
+            user_message: dict = {"role": "user", "content": prompt}
+            if image_base64:
+                user_message["images"] = [image_base64]
+            messages.append(user_message)
 
-            # Use cached image encoding if available
-            if image:
-                enc_image = self._model.encode_image(image)
-            else:
-                # For follow-ups without new image, use simpler prompt
-                full_prompt = f"Based on the previous image description, {prompt}"
-                # We need an image for Moondream, so this is a limitation
-                raise ValueError("Follow-up questions require the original image context")
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    f"{self._ollama_url}/api/chat",
+                    json={
+                        "model": self._model_name,
+                        "messages": messages,
+                        "stream": False,
+                    },
+                )
+                response.raise_for_status()
+                result = response.json()
+                description = result["message"]["content"]
+                processing_ms = int((time.time() - start_time) * 1000)
 
-            response = self._model.answer_question(
-                enc_image,
-                full_prompt,
-                self._tokenizer,
-            )
+                confidence = min(0.92, 0.65 + len(description.split()) * 0.01)
 
+                return description, confidence, processing_ms
+
+        except httpx.HTTPStatusError as e:
             processing_ms = int((time.time() - start_time) * 1000)
-            confidence = min(0.92, 0.65 + len(response.split()) * 0.01)
-
-            return response, confidence, processing_ms
-
+            raise RuntimeError(
+                f"Ollama API error (HTTP {e.response.status_code}): {e.response.text}"
+            )
+        except httpx.ConnectError:
+            raise RuntimeError(
+                f"Cannot connect to Ollama at {self._ollama_url}. "
+                "Make sure Ollama is running (ollama serve)."
+            )
         except Exception as e:
             processing_ms = int((time.time() - start_time) * 1000)
             raise RuntimeError(f"Contextual inference failed: {e}")

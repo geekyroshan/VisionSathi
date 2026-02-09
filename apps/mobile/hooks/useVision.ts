@@ -11,12 +11,64 @@ import { useVisionStore } from '@/stores/visionStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTTS } from './useTTS';
 import { useSTT } from './useSTT';
-import { analyzeImage, sendConversation } from '@/services/api';
+import { analyzeImage, sendConversation, ApiError } from '@/services/api';
 import { triggerHaptic } from '@/constants/haptics';
 
 import type { AppMode } from '../../../packages/shared/types';
 
-export function useVision(cameraRef: React.RefObject<CameraView>) {
+/**
+ * Returns a user-friendly error message based on the error type.
+ */
+function getErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    // Timeout (AbortError from fetchWithTimeout)
+    if (error.message === 'Request timeout') {
+      return 'Analysis timed out. The server may be busy.';
+    }
+
+    // HTTP status-based messages
+    if (error.statusCode === 503) {
+      return 'The AI model is still loading. Please try again in a moment.';
+    }
+
+    if (error.statusCode !== undefined && error.statusCode >= 500) {
+      return 'The server encountered an error. Please try again.';
+    }
+
+    if (error.statusCode === 404) {
+      return 'Cannot reach VisionSathi server. Check your server URL in Settings.';
+    }
+
+    if (error.statusCode !== undefined && error.statusCode >= 400) {
+      return 'Something went wrong with the request. Please try again.';
+    }
+
+    // Network-level errors (no status code means the request never reached the server)
+    if (error.statusCode === undefined) {
+      return 'Cannot reach VisionSathi server. Check your connection.';
+    }
+  }
+
+  // Non-API errors (e.g., camera failure)
+  if (error instanceof Error) {
+    if (error.message === 'Failed to capture photo') {
+      return 'Could not capture a photo. Please try again.';
+    }
+
+    // Network errors from fetch (TypeError: Network request failed)
+    if (
+      error.message.includes('Network request failed') ||
+      error.message.includes('network') ||
+      error.message.includes('Failed to fetch')
+    ) {
+      return 'Cannot reach VisionSathi server. Check your connection.';
+    }
+  }
+
+  return 'Something went wrong. Please try again.';
+}
+
+export function useVision(cameraRef: React.RefObject<CameraView | null>) {
   const {
     processingState,
     currentMode,
@@ -95,7 +147,7 @@ export function useVision(cameraRef: React.RefObject<CameraView>) {
       console.error('Capture error:', error);
       setProcessingState('idle');
 
-      const errorMessage = 'Sorry, I could not analyze the image. Please try again.';
+      const errorMessage = getErrorMessage(error);
       speak(errorMessage);
     }
   }, [
@@ -216,7 +268,9 @@ export function useVision(cameraRef: React.RefObject<CameraView>) {
           } catch (error) {
             console.error('Conversation error:', error);
             setProcessingState('idle');
-            speak('Sorry, I could not process your question. Please try again.');
+
+            const errorMessage = getErrorMessage(error);
+            speak(errorMessage);
           }
         },
         onEnd: () => {

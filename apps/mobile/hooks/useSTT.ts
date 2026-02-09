@@ -1,12 +1,14 @@
 /**
  * VisionSathi - Speech-to-Text Hook
  *
- * Uses expo-av for audio recording and sends to backend for transcription.
- * Falls back to simple voice detection for demo purposes.
+ * Uses expo-speech-recognition for real-time speech recognition.
  */
 
 import { useState, useCallback, useRef } from 'react';
-import { Audio } from 'expo-av';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from 'expo-speech-recognition';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { triggerHaptic } from '@/constants/haptics';
 
@@ -32,18 +34,66 @@ export function useSTT() {
     error: null,
   });
 
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const optionsRef = useRef<STTOptions | undefined>(undefined);
   const hapticEnabled = useSettingsStore((state) => state.hapticEnabled);
 
+  // Listen for speech recognition results
+  useSpeechRecognitionEvent('result', (event) => {
+    if (event.results && event.results.length > 0) {
+      const transcript = event.results[0]?.transcript || '';
+      if (event.isFinal) {
+        setState((s) => ({
+          ...s,
+          isProcessing: false,
+          transcript,
+        }));
+        optionsRef.current?.onTranscript?.(transcript);
+      } else {
+        setState((s) => ({ ...s, transcript }));
+      }
+    }
+  });
+
+  useSpeechRecognitionEvent('start', () => {
+    setState((s) => ({
+      ...s,
+      isListening: true,
+      isProcessing: false,
+      transcript: null,
+      error: null,
+    }));
+    optionsRef.current?.onStart?.();
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    setState((s) => ({
+      ...s,
+      isListening: false,
+      isProcessing: false,
+    }));
+    optionsRef.current?.onEnd?.();
+  });
+
+  useSpeechRecognitionEvent('error', (event) => {
+    const errorMessage = event.error || 'Speech recognition failed';
+    setState((s) => ({
+      ...s,
+      isListening: false,
+      isProcessing: false,
+      error: errorMessage,
+    }));
+    optionsRef.current?.onError?.(new Error(errorMessage));
+  });
+
   /**
-   * Request microphone permission
+   * Request speech recognition permission
    */
   const requestPermission = useCallback(async (): Promise<boolean> => {
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      return status === 'granted';
+      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      return result.granted;
     } catch (error) {
-      console.error('Failed to request microphone permission:', error);
+      console.error('Failed to request speech recognition permission:', error);
       return false;
     }
   }, []);
@@ -53,43 +103,27 @@ export function useSTT() {
    */
   const startListening = useCallback(
     async (options?: STTOptions) => {
-      // Check permission
+      optionsRef.current = options;
+
       const hasPermission = await requestPermission();
       if (!hasPermission) {
-        const error = new Error('Microphone permission denied');
+        const error = new Error('Speech recognition permission denied');
         setState((s) => ({ ...s, error: error.message }));
         options?.onError?.(error);
         return;
       }
 
       try {
-        // Configure audio mode
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-        });
-
-        // Start recording
-        const recording = new Audio.Recording();
-        await recording.prepareToRecordAsync(
-          Audio.RecordingOptionsPresets.HIGH_QUALITY
-        );
-        await recording.startAsync();
-
-        recordingRef.current = recording;
-        setState((s) => ({
-          ...s,
-          isListening: true,
-          isProcessing: false,
-          transcript: null,
-          error: null,
-        }));
-
         triggerHaptic('light', hapticEnabled);
-        options?.onStart?.();
+
+        ExpoSpeechRecognitionModule.start({
+          lang: 'en-US',
+          interimResults: true,
+          continuous: true,
+        });
       } catch (error) {
-        console.error('Failed to start recording:', error);
-        const err = error instanceof Error ? error : new Error('Recording failed');
+        console.error('Failed to start speech recognition:', error);
+        const err = error instanceof Error ? error : new Error('Recognition failed');
         setState((s) => ({ ...s, error: err.message, isListening: false }));
         options?.onError?.(err);
       }
@@ -102,49 +136,16 @@ export function useSTT() {
    */
   const stopListening = useCallback(
     async (options?: STTOptions) => {
-      if (!recordingRef.current) {
-        return;
+      if (options) {
+        optionsRef.current = options;
       }
 
       try {
-        setState((s) => ({ ...s, isListening: false, isProcessing: true }));
-
-        // Stop recording
-        await recordingRef.current.stopAndUnloadAsync();
-        const uri = recordingRef.current.getURI();
-        recordingRef.current = null;
-
-        // Reset audio mode
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-        });
-
+        setState((s) => ({ ...s, isProcessing: true }));
         triggerHaptic('success', hapticEnabled);
-
-        if (uri) {
-          // In a real implementation, send audio to a transcription service
-          // For now, we'll simulate with a placeholder
-          // TODO: Integrate with Whisper API or on-device STT
-
-          // Simulate processing delay
-          await new Promise((resolve) => setTimeout(resolve, 500));
-
-          // Placeholder transcript
-          // In production, this would be the actual transcribed text
-          const transcript = "What do you see?"; // Demo placeholder
-
-          setState((s) => ({
-            ...s,
-            isProcessing: false,
-            transcript,
-          }));
-
-          options?.onTranscript?.(transcript);
-        }
-
-        options?.onEnd?.();
+        ExpoSpeechRecognitionModule.stop();
       } catch (error) {
-        console.error('Failed to stop recording:', error);
+        console.error('Failed to stop speech recognition:', error);
         const err = error instanceof Error ? error : new Error('Stop failed');
         setState((s) => ({
           ...s,
@@ -162,26 +163,18 @@ export function useSTT() {
    * Cancel listening without processing
    */
   const cancelListening = useCallback(async () => {
-    if (recordingRef.current) {
-      try {
-        await recordingRef.current.stopAndUnloadAsync();
-        recordingRef.current = null;
-
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-        });
-      } catch (error) {
-        console.error('Failed to cancel recording:', error);
-      }
+    try {
+      ExpoSpeechRecognitionModule.abort();
+    } catch (error) {
+      console.error('Failed to cancel speech recognition:', error);
     }
 
-    setState((s) => ({
-      ...s,
+    setState({
       isListening: false,
       isProcessing: false,
       transcript: null,
       error: null,
-    }));
+    });
   }, []);
 
   /**

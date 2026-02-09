@@ -9,7 +9,6 @@ import uuid
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict
-from PIL import Image
 
 from services.moondream import get_moondream
 from prompts.describe import get_prompt_for_mode
@@ -65,13 +64,12 @@ async def create_or_continue_conversation(request: ConversationRequest):
 
     moondream = get_moondream()
 
-    # Check if model is loaded
-    if not moondream.is_loaded():
-        if not moondream.load_model():
-            raise HTTPException(
-                status_code=503,
-                detail="Model not available. Please try again later."
-            )
+    # Check if Ollama model is available
+    if not await moondream.is_loaded():
+        raise HTTPException(
+            status_code=503,
+            detail="Model not available. Make sure Ollama is running with the moondream model pulled."
+        )
 
     # Generate or use existing conversation ID
     conv_id = request.conversationId or f"conv_{uuid.uuid4().hex[:8]}"
@@ -79,25 +77,22 @@ async def create_or_continue_conversation(request: ConversationRequest):
     # Get or create conversation state
     conv_state = conversations.get(conv_id, {
         "history": [],
-        "last_image": None,
+        "last_image_base64": None,
     })
 
     # Decode new image if provided
-    current_image: Optional[Image.Image] = None
+    current_image_base64: Optional[str] = None
     if request.image:
         try:
-            current_image = moondream.decode_image(request.image)
-            conv_state["last_image"] = request.image  # Store for follow-ups
+            current_image_base64 = moondream.decode_image(request.image)
+            conv_state["last_image_base64"] = current_image_base64  # Store for follow-ups
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
-    elif conv_state.get("last_image"):
+    elif conv_state.get("last_image_base64"):
         # Use cached image for follow-up questions
-        try:
-            current_image = moondream.decode_image(conv_state["last_image"])
-        except Exception:
-            pass
+        current_image_base64 = conv_state["last_image_base64"]
 
-    if current_image is None:
+    if current_image_base64 is None:
         raise HTTPException(
             status_code=400,
             detail="No image available. Please provide an image for new conversations."
@@ -126,10 +121,10 @@ async def create_or_continue_conversation(request: ConversationRequest):
         full_prompt = f"{base_prompt}\n\nUser question: {request.message}"
 
     try:
-        # Run inference
-        response_text, confidence, processing_ms = moondream.analyze(
-            current_image,
-            full_prompt
+        # Run inference via Ollama
+        response_text, confidence, processing_ms = await moondream.analyze(
+            current_image_base64,
+            full_prompt,
         )
 
         # Update conversation state
@@ -176,7 +171,7 @@ async def get_conversation(conversation_id: str):
     return {
         "conversationId": conversation_id,
         "history": conv["history"],
-        "hasImage": conv.get("last_image") is not None,
+        "hasImage": conv.get("last_image_base64") is not None,
     }
 
 

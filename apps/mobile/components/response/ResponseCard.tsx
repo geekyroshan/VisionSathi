@@ -1,18 +1,19 @@
 /**
  * VisionSathi - ResponseCard Component
  *
- * Displays AI response with audio controls.
+ * Displays AI response with glassmorphism styling,
+ * slide-up entrance animation, and audio controls.
  */
 
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
 import { layout } from '@/constants';
 import { triggerHaptic } from '@/constants/haptics';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useVisionStore } from '@/stores/visionStore';
-import { Text, Card } from '@/components/ui';
+import { Text, GlassCard } from '@/components/ui';
 
 interface ResponseCardProps {
   /** Response text */
@@ -58,103 +59,127 @@ export function ResponseCard({
   };
 
   return (
-    <Card variant="elevated" padding="medium" style={styles.card}>
-      {/* Header with source indicator */}
-      <View style={styles.header}>
-        <View style={styles.sourceIndicator}>
-          <Ionicons
-            name={source === 'cloud' ? 'cloud' : 'phone-portrait'}
-            size={16}
-            color={
-              source === 'cloud'
-                ? colors.semantic.online
-                : colors.semantic.offline
-            }
-          />
-          <Text variant="caption" color="secondary">
-            {source === 'cloud' ? 'Cloud' : 'On-device'}
-          </Text>
+    <Animated.View entering={FadeInDown.duration(350).springify()}>
+      <GlassCard intensity="strong" padding="medium">
+        {/* Accent top border line */}
+        <View style={styles.accentLine} />
+
+        {/* Header with source indicator */}
+        <View style={styles.header}>
+          <View style={styles.sourcePill}>
+            <Ionicons
+              name={source === 'cloud' ? 'cloud' : 'phone-portrait'}
+              size={12}
+              color={
+                source === 'cloud'
+                  ? colors.semantic.online
+                  : colors.semantic.offline
+              }
+            />
+            <Text variant="caption" color="secondary">
+              {source === 'cloud' ? 'Cloud' : 'On-device'}
+            </Text>
+          </View>
+          {processingMs !== undefined && processingMs > 0 && (
+            <Text variant="caption" color="secondary">
+              {(processingMs / 1000).toFixed(1)}s
+            </Text>
+          )}
         </View>
-        {processingMs && (
-          <Text variant="caption" color="secondary">
-            {(processingMs / 1000).toFixed(1)}s
-          </Text>
-        )}
-      </View>
 
-      {/* Response text */}
-      <Text
-        variant="body"
-        style={styles.responseText}
-        accessibilityLabel={`Response: ${text}`}
-      >
-        {text}
-      </Text>
-
-      {/* Audio controls */}
-      <View style={styles.controls}>
-        <Pressable
-          onPress={handleToggle}
-          style={styles.controlButton}
-          accessibilityRole="button"
-          accessibilityLabel={isSpeaking ? 'Pause speech' : 'Resume speech'}
+        {/* Response text */}
+        <Text
+          variant="body"
+          style={styles.responseText}
+          accessibilityLabel={`Response: ${text}`}
         >
-          <Ionicons
-            name={isSpeaking ? 'pause' : 'play'}
-            size={20}
-            color={colors.text.primary}
-          />
-          <Text variant="caption">{isSpeaking ? 'Pause' : 'Play'}</Text>
-        </Pressable>
+          {text}
+        </Text>
 
-        <Pressable
-          onPress={handleRepeat}
-          style={styles.controlButton}
-          accessibilityRole="button"
-          accessibilityLabel="Repeat response"
-        >
-          <Ionicons name="refresh" size={20} color={colors.text.primary} />
-          <Text variant="caption">Repeat</Text>
-        </Pressable>
-      </View>
+        {/* Audio controls */}
+        <View style={styles.controls}>
+          <Pressable
+            onPress={handleToggle}
+            style={styles.controlButton}
+            accessibilityRole="button"
+            accessibilityLabel={isSpeaking ? 'Pause speech' : 'Resume speech'}
+          >
+            <View style={styles.controlIconCircle}>
+              <Ionicons
+                name={isSpeaking ? 'pause' : 'play'}
+                size={16}
+                color={colors.text.primary}
+              />
+            </View>
+            <Text variant="caption">{isSpeaking ? 'Pause' : 'Play'}</Text>
+          </Pressable>
 
-      {/* Follow-up prompt */}
-      {onFollowUp && (
-        <Pressable
-          onPress={handleFollowUp}
-          style={styles.followUpButton}
-          accessibilityRole="button"
-          accessibilityLabel="Ask a follow-up question"
-          accessibilityHint="Opens conversation mode"
-        >
-          <Ionicons
-            name="chatbubble-outline"
-            size={18}
-            color={colors.accent.action}
-          />
-          <Text variant="bodySmall" color="accent">
-            Ask follow-up...
-          </Text>
-        </Pressable>
-      )}
-    </Card>
+          <Pressable
+            onPress={handleRepeat}
+            style={styles.controlButton}
+            accessibilityRole="button"
+            accessibilityLabel="Repeat response"
+          >
+            <View style={styles.controlIconCircle}>
+              <Ionicons name="refresh" size={16} color={colors.text.primary} />
+            </View>
+            <Text variant="caption">Repeat</Text>
+          </Pressable>
+
+          {onFollowUp && (
+            <Pressable
+              onPress={handleFollowUp}
+              style={styles.controlButton}
+              accessibilityRole="button"
+              accessibilityLabel="Ask a follow-up question"
+              accessibilityHint="Opens conversation mode"
+            >
+              <View style={[styles.controlIconCircle, styles.controlIconAccent]}>
+                <Ionicons
+                  name="chatbubble-outline"
+                  size={16}
+                  color={colors.accent.action}
+                />
+              </View>
+              <Text variant="caption" color="accent">
+                Follow-up
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      </GlassCard>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    marginTop: layout.spacing.md,
+  accentLine: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: colors.accent.action,
+    borderTopLeftRadius: layout.borderRadius.md,
+    borderTopRightRadius: layout.borderRadius.md,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: layout.spacing.sm,
+    marginTop: layout.spacing.xs,
   },
-  sourceIndicator: {
+  sourcePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: layout.spacing.xs,
+    gap: 4,
+    paddingHorizontal: layout.spacing.sm,
+    paddingVertical: 2,
+    borderRadius: layout.borderRadius.full,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
   },
   responseText: {
     marginBottom: layout.spacing.md,
@@ -164,21 +189,28 @@ const styles = StyleSheet.create({
     gap: layout.spacing.md,
     paddingTop: layout.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.border.subtle,
+    borderTopColor: colors.glass.border,
   },
   controlButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: layout.spacing.xs,
     paddingVertical: layout.spacing.sm,
-    paddingHorizontal: layout.spacing.md,
+    paddingHorizontal: layout.spacing.sm,
     minHeight: 44,
   },
-  followUpButton: {
-    flexDirection: 'row',
+  controlIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.glass.backgroundStrong,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
     alignItems: 'center',
-    gap: layout.spacing.sm,
-    marginTop: layout.spacing.md,
-    paddingVertical: layout.spacing.sm,
+    justifyContent: 'center',
+  },
+  controlIconAccent: {
+    borderColor: 'rgba(0, 212, 170, 0.3)',
+    backgroundColor: 'rgba(0, 212, 170, 0.1)',
   },
 });

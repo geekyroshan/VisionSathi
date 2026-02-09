@@ -49,6 +49,21 @@ export const colors = {
     camera: 'rgba(10, 10, 11, 0.6)',  // Camera dimming overlay
     modal: 'rgba(0, 0, 0, 0.8)',      // Modal backdrop
   },
+
+  // Glassmorphism tokens
+  glass: {
+    background: 'rgba(255, 255, 255, 0.05)',
+    backgroundStrong: 'rgba(255, 255, 255, 0.08)',
+    border: 'rgba(255, 255, 255, 0.1)',
+    highlight: 'rgba(255, 255, 255, 0.15)',
+  },
+
+  // Glow effects
+  glow: {
+    action: 'rgba(0, 212, 170, 0.3)',
+    listening: 'rgba(99, 102, 241, 0.3)',
+    warning: 'rgba(245, 158, 11, 0.3)',
+  },
 } as const;
 
 // Type for color tokens

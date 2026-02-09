@@ -2,9 +2,10 @@
  * VisionSathi - History Screen
  *
  * View past conversation sessions with replay and delete.
+ * Glassmorphism design with GlassCard session cards and date grouping.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -12,19 +13,37 @@ import {
   Pressable,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
-import { typography } from '@/constants/typography';
 import { layout } from '@/constants';
 import { triggerHaptic } from '@/constants/haptics';
 import { useHistoryStore } from '@/stores/historyStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTTS } from '@/hooks/useTTS';
-import { Text, Card, FadeIn } from '@/components/ui';
+import { Text, GlassCard, FadeIn } from '@/components/ui';
+
+type HistoryStoreState = ReturnType<typeof useHistoryStore.getState>;
+type HistorySession = HistoryStoreState['sessions'][0];
+
+interface DateGroup {
+  type: 'header';
+  title: string;
+  id: string;
+}
+
+interface SessionItem {
+  type: 'session';
+  session: HistorySession;
+  id: string;
+}
+
+type ListItem = DateGroup | SessionItem;
 
 export default function HistoryScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { sessions, deleteSession, clearHistory } = useHistoryStore();
   const hapticEnabled = useSettingsStore((state) => state.hapticEnabled);
   const { speak } = useTTS();
@@ -77,53 +96,86 @@ export default function HistoryScreen() {
     );
   }, [hapticEnabled, clearHistory]);
 
-  const formatDate = (timestamp: number) => {
+  const getDateLabel = (timestamp: number): string => {
     const date = new Date(timestamp);
     const now = new Date();
     const diffDays = Math.floor(
       (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    if (diffDays === 0) {
-      return `Today ${date.toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      })}`;
-    } else if (diffDays === 1) {
-      return 'Yesterday';
-    } else if (diffDays < 7) {
-      return date.toLocaleDateString([], { weekday: 'long' });
-    }
-    return date.toLocaleDateString();
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return date.toLocaleDateString([], { weekday: 'long' });
+    return date.toLocaleDateString([], { month: 'long', day: 'numeric' });
   };
 
-  const renderSession = ({
-    item,
-    index,
-  }: {
-    item: (typeof sessions)[0];
-    index: number;
-  }) => {
-    const lastMessage = item.messages[item.messages.length - 1];
+  const formatTime = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // Group sessions by date
+  const groupedItems: ListItem[] = useMemo(() => {
+    const items: ListItem[] = [];
+    let lastGroup = '';
+
+    sessions.forEach((session) => {
+      const group = getDateLabel(session.timestamp);
+      if (group !== lastGroup) {
+        items.push({
+          type: 'header',
+          title: group,
+          id: `header-${group}`,
+        });
+        lastGroup = group;
+      }
+      items.push({
+        type: 'session',
+        session,
+        id: session.id,
+      });
+    });
+
+    return items;
+  }, [sessions]);
+
+  const renderItem = ({ item, index }: { item: ListItem; index: number }) => {
+    if (item.type === 'header') {
+      return (
+        <View style={styles.dateHeader}>
+          <Text variant="caption" color="secondary" style={styles.dateHeaderText}>
+            {item.title}
+          </Text>
+          <View style={styles.dateHeaderLine} />
+        </View>
+      );
+    }
+
+    const session = item.session;
+    const lastMessage = session.messages[session.messages.length - 1];
     const preview = lastMessage?.content.slice(0, 100) || 'No content';
 
     return (
       <FadeIn delay={index * 50}>
-        <Card variant="elevated" padding="medium" style={styles.sessionCard}>
+        <GlassCard intensity="medium" padding="medium" style={styles.sessionCard}>
           <View style={styles.sessionHeader}>
             <View style={styles.sessionMeta}>
               <Text variant="caption" color="secondary">
-                {formatDate(item.timestamp)}
+                {formatTime(session.timestamp)}
               </Text>
               <View style={styles.modeTag}>
                 <Text variant="caption" color="secondary">
-                  {item.mode}
+                  {session.mode}
                 </Text>
               </View>
             </View>
             <Pressable
-              onPress={() => handleDelete(item.id)}
+              onPress={() => handleDelete(session.id)}
               hitSlop={12}
+              style={styles.deleteButton}
               accessibilityLabel="Delete session"
               accessibilityRole="button"
             >
@@ -146,37 +198,42 @@ export default function HistoryScreen() {
               accessibilityLabel="Replay response"
               accessibilityRole="button"
             >
-              <Ionicons
-                name="play-circle-outline"
-                size={20}
-                color={colors.accent.action}
-              />
+              <View style={styles.actionIconCircle}>
+                <Ionicons
+                  name="play"
+                  size={14}
+                  color={colors.accent.action}
+                />
+              </View>
               <Text variant="caption" color="accent">
                 Replay
               </Text>
             </Pressable>
 
             <Text variant="caption" color="secondary">
-              {item.messages.length} messages
+              {session.messages.length} messages
             </Text>
           </View>
-        </Card>
+        </GlassCard>
       </FadeIn>
     );
   };
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons
-        name="chatbubbles-outline"
-        size={64}
-        color={colors.text.secondary}
-      />
+      <View style={styles.emptyIconContainer}>
+        <Ionicons
+          name="chatbubbles-outline"
+          size={64}
+          color={colors.text.secondary}
+        />
+      </View>
       <Text variant="heading" style={styles.emptyTitle}>
         No conversations yet
       </Text>
       <Text variant="body" color="secondary" center>
-        Your conversation history will appear here after you start using VisionSathi.
+        Your conversation history will appear here after you start using
+        VisionSathi.
       </Text>
     </View>
   );
@@ -217,10 +274,13 @@ export default function HistoryScreen() {
       </View>
 
       <FlatList
-        data={sessions}
-        renderItem={renderSession}
+        data={groupedItems}
+        renderItem={renderItem}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: insets.bottom + layout.spacing.xl },
+        ]}
         ListEmptyComponent={renderEmpty}
         showsVerticalScrollIndicator={false}
       />
@@ -258,6 +318,25 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     flexGrow: 1,
   },
+
+  // Date grouping
+  dateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: layout.spacing.sm,
+    marginTop: layout.spacing.md,
+    marginBottom: layout.spacing.sm,
+  },
+  dateHeaderText: {
+    letterSpacing: 0.5,
+  },
+  dateHeaderLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.glass.border,
+  },
+
+  // Session card
   sessionCard: {
     marginBottom: layout.spacing.md,
   },
@@ -273,10 +352,18 @@ const styles = StyleSheet.create({
     gap: layout.spacing.sm,
   },
   modeTag: {
-    backgroundColor: colors.background.primary,
     paddingHorizontal: layout.spacing.sm,
     paddingVertical: 2,
-    borderRadius: layout.borderRadius.sm,
+    borderRadius: layout.borderRadius.full,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  deleteButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   preview: {
     marginBottom: layout.spacing.md,
@@ -287,18 +374,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: layout.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.border.subtle,
+    borderTopColor: colors.glass.border,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: layout.spacing.xs,
+    minHeight: 44,
+    paddingVertical: layout.spacing.xs,
   },
+  actionIconCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 212, 170, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 170, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Empty state
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: layout.spacing.xl,
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyTitle: {
     marginTop: layout.spacing.lg,
