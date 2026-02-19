@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "moondream"
 
+    # OpenAI fallback settings
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o"
+
     # Cache settings
     cache_enabled: bool = True
     cache_ttl: int = 3600  # 1 hour

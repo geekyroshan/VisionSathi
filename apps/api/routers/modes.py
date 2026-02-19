@@ -2,17 +2,73 @@
 VisionSathi API - Modes Router
 
 Specialized endpoints for Read and Navigate modes.
+Moondream → OpenAI fallback on each.
 """
 
 import time
+import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 
 from services.moondream import get_moondream
+from services.openai_service import get_openai
 from prompts.describe import get_prompt_for_mode
+from prompts.personality import get_sathi_prompt
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _decode_image(image_str: str) -> str:
+    """Strip data URL prefix from base64 image."""
+    if "," in image_str:
+        image_str = image_str.split(",", 1)[1]
+    return image_str
+
+
+async def _analyze_with_fallback(
+    image_base64: str,
+    mode: str,
+    verbosity: str,
+) -> tuple[str, float, int, str]:
+    """
+    Try Moondream, fall back to OpenAI. Returns (text, confidence, ms, source).
+    """
+    prompt = get_prompt_for_mode(mode, verbosity)
+
+    # Try Moondream first
+    moondream = get_moondream()
+    try:
+        if await moondream.is_loaded():
+            text, confidence, ms = await moondream.analyze(image_base64, prompt)
+            return text, confidence, ms, "moondream"
+        else:
+            raise RuntimeError("Moondream not loaded")
+    except Exception as e:
+        logger.info(f"Moondream unavailable ({e}), trying OpenAI fallback...")
+
+    # Fallback to OpenAI
+    openai_svc = get_openai()
+    if not openai_svc.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="I'm having trouble seeing right now. Neither Moondream nor OpenAI is available.",
+        )
+
+    try:
+        sathi_prompt = get_sathi_prompt(mode, verbosity)
+        text, confidence, ms = await openai_svc.analyze(
+            image_base64,
+            system_prompt=sathi_prompt,
+            user_prompt=prompt,
+        )
+        return text, confidence, ms, "openai"
+    except Exception as fallback_error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Both Moondream and OpenAI failed. Last error: {fallback_error}",
+        )
 
 
 # ============================================
@@ -50,65 +106,45 @@ async def read_text(request: ReadRequest):
     """
     Extract and read text from image (OCR mode).
 
-    Optimized prompt for text detection and reading order.
+    Tries Moondream first, falls back to OpenAI GPT-4o.
     """
-    start_time = time.time()
-
-    moondream = get_moondream()
-
-    if not await moondream.is_loaded():
-        raise HTTPException(
-            status_code=503,
-            detail="Model not available. Make sure Ollama is running with the moondream model pulled."
-        )
-
     try:
-        image_base64 = moondream.decode_image(request.image)
+        image_base64 = _decode_image(request.image)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
 
-    prompt = get_prompt_for_mode("read", request.verbosity)
+    text, confidence, processing_ms, source = await _analyze_with_fallback(
+        image_base64, "read", request.verbosity
+    )
 
-    try:
-        text, confidence, processing_ms = await moondream.analyze(
-            image_base64, prompt
-        )
+    # Parse response into text blocks (simple heuristic)
+    lines = text.strip().split("\n")
+    text_blocks = []
 
-        # Parse response into text blocks (simple heuristic)
-        lines = text.strip().split("\n")
-        text_blocks = []
+    for i, line in enumerate(lines):
+        line = line.strip()
+        if not line:
+            continue
 
-        for i, line in enumerate(lines):
-            line = line.strip()
-            if not line:
-                continue
+        block_type = "body"
+        if i == 0 or line.isupper():
+            block_type = "heading"
+        elif "sign" in line.lower() or "label" in line.lower():
+            block_type = "sign"
 
-            # Detect type based on content
-            block_type = "body"
-            if i == 0 or line.isupper():
-                block_type = "heading"
-            elif "sign" in line.lower() or "label" in line.lower():
-                block_type = "sign"
+        text_blocks.append(TextBlock(
+            type=block_type,
+            content=line,
+            position="detected"
+        ))
 
-            text_blocks.append(TextBlock(
-                type=block_type,
-                content=line,
-                position="detected"
-            ))
-
-        return ReadResponse(
-            id=f"read_{int(time.time())}",
-            text=text,
-            textBlocks=text_blocks,
-            processingMs=processing_ms,
-            source="cloud",
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Text reading failed: {str(e)}"
-        )
+    return ReadResponse(
+        id=f"read_{int(time.time())}",
+        text=text,
+        textBlocks=text_blocks,
+        processingMs=processing_ms,
+        source=source,
+    )
 
 
 # ============================================
@@ -165,100 +201,78 @@ async def analyze_for_navigation(request: NavigateRequest):
     """
     Analyze image for navigation assistance.
 
-    Returns obstacles, clear paths, exits, and navigation recommendations.
-    Warnings are prioritized for safety.
+    Tries Moondream first, falls back to OpenAI GPT-4o.
     """
-    start_time = time.time()
-
-    moondream = get_moondream()
-
-    if not await moondream.is_loaded():
-        raise HTTPException(
-            status_code=503,
-            detail="Model not available. Make sure Ollama is running with the moondream model pulled."
-        )
-
     try:
-        image_base64 = moondream.decode_image(request.image)
+        image_base64 = _decode_image(request.image)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
 
-    prompt = get_prompt_for_mode("navigate", request.verbosity)
+    response_text, confidence, processing_ms, source = await _analyze_with_fallback(
+        image_base64, "navigate", request.verbosity
+    )
 
-    try:
-        response_text, confidence, processing_ms = await moondream.analyze(
-            image_base64, prompt
-        )
+    # Parse response for structured data (heuristics)
+    response_lower = response_text.lower()
 
-        # Parse response for structured data (heuristics)
-        response_lower = response_text.lower()
-
-        # Extract obstacles
-        obstacles = []
-        obstacle_keywords = ["chair", "table", "box", "bag", "person", "object", "obstacle"]
-        for kw in obstacle_keywords:
-            if kw in response_lower:
-                # Try to extract position
-                position = "ahead"
-                if "left" in response_lower:
-                    position = "left"
-                elif "right" in response_lower:
-                    position = "right"
-
-                obstacles.append(Obstacle(
-                    type=kw,
-                    position=position,
-                    distance="nearby",
-                    risk="medium"
-                ))
-                break  # Just get first one for now
-
-        # Extract exits
-        exits = []
-        if "door" in response_lower:
+    # Extract obstacles
+    obstacles = []
+    obstacle_keywords = ["chair", "table", "box", "bag", "person", "object", "obstacle"]
+    for kw in obstacle_keywords:
+        if kw in response_lower:
             position = "ahead"
             if "left" in response_lower:
                 position = "left"
             elif "right" in response_lower:
                 position = "right"
-            exits.append(Exit(type="door", position=position, distance="visible"))
 
-        if "stairs" in response_lower:
-            exits.append(Exit(type="stairs", position="ahead", distance="visible"))
+            obstacles.append(Obstacle(
+                type=kw,
+                position=position,
+                distance="nearby",
+                risk="medium"
+            ))
+            break
 
-        # Generate warnings
-        warnings = []
-        if obstacles:
-            warnings.append(f"{obstacles[0].type.title()} detected {obstacles[0].position}")
-        if "careful" in response_lower or "caution" in response_lower:
-            warnings.append("Proceed with caution")
+    # Extract exits
+    exits = []
+    if "door" in response_lower:
+        position = "ahead"
+        if "left" in response_lower:
+            position = "left"
+        elif "right" in response_lower:
+            position = "right"
+        exits.append(Exit(type="door", position=position, distance="visible"))
 
-        # Generate recommendation
-        if "clear" in response_lower:
-            recommendation = "Path appears clear. Proceed forward."
-        elif obstacles:
-            recommendation = f"Obstacle detected. Move {obstacles[0].position} to avoid."
-        else:
-            recommendation = "Proceed carefully."
+    if "stairs" in response_lower:
+        exits.append(Exit(type="stairs", position="ahead", distance="visible"))
 
-        # Create summary
-        summary = response_text.split(".")[0] + "." if response_text else "Unable to analyze."
+    # Generate warnings
+    warnings = []
+    if obstacles:
+        warnings.append(f"{obstacles[0].type.title()} detected {obstacles[0].position}")
+    if "careful" in response_lower or "caution" in response_lower:
+        warnings.append("Proceed with caution")
 
-        return NavigateResponse(
-            id=f"nav_{int(time.time())}",
-            summary=summary,
-            obstacles=obstacles,
-            navigation=NavigationInfo(
-                recommendation=recommendation,
-                warnings=warnings
-            ),
-            exits=exits,
-            processingMs=processing_ms,
-            source="cloud",
-        )
+    # Generate recommendation
+    if "clear" in response_lower:
+        recommendation = "Path appears clear. Proceed forward."
+    elif obstacles:
+        recommendation = f"Obstacle detected. Move {obstacles[0].position} to avoid."
+    else:
+        recommendation = "Proceed carefully."
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Navigation analysis failed: {str(e)}"
-        )
+    summary = response_text.split(".")[0] + "." if response_text else "Unable to analyze."
+
+    return NavigateResponse(
+        id=f"nav_{int(time.time())}",
+        summary=summary,
+        obstacles=obstacles,
+        navigation=NavigationInfo(
+            recommendation=recommendation,
+            warnings=warnings
+        ),
+        exits=exits,
+        processingMs=processing_ms,
+        source=source,
+    )

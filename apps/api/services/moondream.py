@@ -136,15 +136,23 @@ class MoondreamService:
         try:
             # Build messages array from history
             messages: List[dict] = []
+            image_attached = False
             for msg in history[-10:]:  # Last 10 messages for context
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
                 if content and content != "[image]":
-                    messages.append({"role": role, "content": content})
+                    m: dict = {"role": role, "content": content}
+                    # Attach image to the first user message so the model
+                    # has visual context for the entire conversation
+                    if not image_attached and role == "user" and image_base64:
+                        m["images"] = [image_base64]
+                        image_attached = True
+                    messages.append(m)
 
-            # Add current user message with image if available
+            # Add current user message
             user_message: dict = {"role": "user", "content": prompt}
-            if image_base64:
+            # If no history had a user message, attach image to current message
+            if not image_attached and image_base64:
                 user_message["images"] = [image_base64]
             messages.append(user_message)
 

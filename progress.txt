@@ -174,6 +174,64 @@ New (4):
 - react-native-reanimated v4: useAnimatedStyle + withRepeat + withTiming for glow animations
 - CaptureButton idle animation: 3s breathing teal glow; listening: 0.8s indigo pulse; processing: amber spin
 
+### 2026-02-16 - OpenAI Fallback + Sathi Personality
+
+Added OpenAI GPT-4o as automatic fallback when Moondream/Ollama is unavailable,
+and created the "Sathi" warm human guide personality for all voice responses.
+
+#### Fallback Chain
+```
+Request → Ollama/Moondream (local, free) → OpenAI GPT-4o (cloud, paid) → Friendly error
+```
+
+#### What Was Built
+
+**New Files (3):**
+- `apps/api/services/openai_service.py` — OpenAI GPT-4o vision service (singleton, async, lazy client init)
+  - `analyze()` — Single-shot image analysis with system prompt + vision
+  - `analyze_with_context()` — Multi-turn conversation with image + history
+  - `is_available()` — Checks if OPENAI_API_KEY is set
+- `apps/api/prompts/personality.py` — Sathi personality system
+  - `SATHI_SYSTEM_PROMPT` — Full personality definition (warm friend, natural language, safety-first)
+  - `SATHI_PROMPTS` — Mode-specific prompts (describe/read/navigate × brief/normal/detailed)
+  - `get_sathi_prompt(mode, verbosity)` — Helper to get the right prompt
+- `docs/plans/2026-02-16-openai-fallback-sathi-personality-design.md` — Design document
+
+**Modified Files (6):**
+- `apps/api/config.py` — Added `openai_api_key` and `openai_model` ("gpt-4o") settings
+- `apps/api/requirements.txt` — Added `openai>=1.50.0`
+- `apps/api/routers/analyze.py` — Moondream → OpenAI fallback, Sathi personality prompts for OpenAI
+- `apps/api/routers/conversation.py` — Moondream → OpenAI fallback, added `source` field to response
+- `apps/api/routers/modes.py` — Extracted `_analyze_with_fallback()` helper, both /read and /navigate use it
+- `apps/api/main.py` — Logs OpenAI fallback availability at startup
+- `apps/api/.env.example` — Updated with Ollama + OpenAI settings
+
+**Created (not committed, gitignored):**
+- `apps/api/.env` — Local env with OPENAI_API_KEY set
+
+#### Sathi Personality
+- Speaks like a warm friend: "I can see...", "There's a...", "Looks like..."
+- Safety info always first
+- Never patronizing, never robotic
+- Natural reactions: "Oh nice, there's a bakery on your left"
+- For OpenAI: full personality via system prompt
+- For Moondream: lighter personality hints (2B model, keep practical)
+
+#### Verified Working
+- [x] All Python imports load clean
+- [x] API starts successfully, logs OpenAI availability
+- [x] Fallback tested: Moondream unavailable → OpenAI responds with Sathi personality
+- [x] Test response: "Hey, the image is a solid bright yellow square." (source: openai, 3513ms)
+- [x] API accessible on local network (172.20.10.3:8000)
+- [x] Health endpoint shows model_loaded=false (Ollama not running) but API serves via fallback
+
+#### Learnings
+- OpenAI `openai` SDK supports `AsyncOpenAI` client for async FastAPI
+- GPT-4o vision accepts base64 images as `data:image/jpeg;base64,{b64}` in image_url
+- `detail: "low"` on image_url reduces token cost for accessibility descriptions
+- Lazy-importing `openai` SDK avoids import errors when key not set
+- expo-speech-recognition is a native module — does NOT work in Expo Go, requires dev build
+
 ---
 
 ## Stories Completed: 24/24 (100%)
@@ -185,18 +243,21 @@ New (4):
 | Phase 3 (Voice) | 6/6 |
 | Phase 4 (Polish) | 6/6 |
 
-## Remaining Steps
-- [x] Install mobile deps: `cd apps/mobile && npx expo install expo-speech-recognition expo-build-properties` (used --legacy-peer-deps)
-- [x] Install Python deps: `cd apps/api && pip install -r requirements.txt` (updated version pins for Python 3.13 compat)
-- [x] Fix TypeScript errors: 7 errors fixed (RefObject nullability, route type casts, useRef init arg, store type inference)
+## Remaining Steps (Resume Here)
+- [x] Install mobile deps
+- [x] Install Python deps (including openai SDK)
+- [x] TypeScript compiles clean
 - [x] Python API module loads OK
-- [x] TypeScript compiles clean (`npx tsc --noEmit` passes)
-- [ ] Set up Ollama: `ollama serve && ollama pull moondream`
-- [ ] Start API: `cd apps/api && uvicorn main:app --host 0.0.0.0 --port 8000`
-- [ ] Start mobile: `cd apps/mobile && npx expo start`
-- [ ] End-to-end test on Android device/emulator
-- [x] Commit all changes
-- [ ] Build APK: `cd apps/mobile && eas build --platform android --profile preview`
+- [x] OpenAI fallback implemented and tested
+- [x] Sathi personality system created
+- [x] API server verified working on local network
+- [ ] **Log into EAS**: `cd apps/mobile && eas login` (need Expo account)
+- [ ] **Build APK**: `cd apps/mobile && eas build --platform android --profile preview`
+- [ ] **Install APK** on Android phone and set server URL to local IP
+- [ ] **End-to-end test**: Camera → capture → API (OpenAI fallback) → Sathi speaks description
+- [ ] **Test conversation mode**: Long-press → voice input → follow-up questions
+- [ ] **Commit all changes** (OpenAI fallback + Sathi personality)
+- [ ] Optional: Set up Ollama for local Moondream inference (`ollama serve && ollama pull moondream`)
 
 ### Additional Fixes (2026-02-09)
 - Updated `requirements.txt` to use >= version pins (old pins incompatible with Python 3.13)

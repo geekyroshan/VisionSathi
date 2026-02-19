@@ -32,6 +32,14 @@ async def lifespan(app: FastAPI):
             f"ollama pull {settings.ollama_model}"
         )
 
+    # Check OpenAI fallback availability
+    from services.openai_service import get_openai
+    openai_svc = get_openai()
+    if openai_svc.is_available():
+        print(f"OpenAI fallback configured (model: {settings.openai_model})")
+    else:
+        print("Warning: OPENAI_API_KEY not set. OpenAI fallback disabled.")
+
     yield
 
     # Shutdown
