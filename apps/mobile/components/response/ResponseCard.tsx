@@ -103,6 +103,7 @@ export function ResponseCard({
             style={styles.controlButton}
             accessibilityRole="button"
             accessibilityLabel={isSpeaking ? 'Pause speech' : 'Resume speech'}
+            accessibilityHint={isSpeaking ? 'Double tap to pause' : 'Double tap to resume speaking'}
           >
             <View style={styles.controlIconCircle}>
               <Ionicons
@@ -119,6 +120,7 @@ export function ResponseCard({
             style={styles.controlButton}
             accessibilityRole="button"
             accessibilityLabel="Repeat response"
+            accessibilityHint="Double tap to hear the response again"
           >
             <View style={styles.controlIconCircle}>
               <Ionicons name="refresh" size={16} color={colors.text.primary} />
@@ -210,7 +212,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   controlIconAccent: {
-    borderColor: 'rgba(0, 212, 170, 0.3)',
+    borderColor: colors.glow.action,
     backgroundColor: 'rgba(0, 212, 170, 0.1)',
   },
 });

@@ -145,7 +145,7 @@ export default function HistoryScreen() {
   const renderItem = ({ item, index }: { item: ListItem; index: number }) => {
     if (item.type === 'header') {
       return (
-        <View style={styles.dateHeader}>
+        <View style={styles.dateHeader} accessibilityRole="header">
           <Text variant="caption" color="secondary" style={styles.dateHeaderText}>
             {item.title}
           </Text>
@@ -178,6 +178,7 @@ export default function HistoryScreen() {
               style={styles.deleteButton}
               accessibilityLabel="Delete session"
               accessibilityRole="button"
+              accessibilityHint="Double tap to permanently delete this conversation"
             >
               <Ionicons
                 name="trash-outline"
@@ -197,6 +198,7 @@ export default function HistoryScreen() {
               style={styles.actionButton}
               accessibilityLabel="Replay response"
               accessibilityRole="button"
+              accessibilityHint="Double tap to hear the response again"
             >
               <View style={styles.actionIconCircle}>
                 <Ionicons
@@ -302,14 +304,14 @@ const styles = StyleSheet.create({
     height: layout.headerHeight,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     alignItems: 'center',
     justifyContent: 'center',
   },
   clearButton: {
-    width: 40,
-    height: 40,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -360,8 +362,8 @@ const styles = StyleSheet.create({
     borderColor: colors.glass.border,
   },
   deleteButton: {
-    width: 36,
-    height: 36,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -389,7 +391,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: 'rgba(0, 212, 170, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 170, 0.3)',
+    borderColor: colors.glow.action,
     alignItems: 'center',
     justifyContent: 'center',
   },

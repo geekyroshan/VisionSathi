@@ -55,10 +55,10 @@ export function GlassCard({
       ? {
           shadowColor:
             glow === 'action'
-              ? '#00D4AA'
+              ? colors.accent.action
               : glow === 'listening'
-              ? '#6366F1'
-              : '#F59E0B',
+              ? colors.accent.listening
+              : colors.accent.warning,
           shadowOffset: { width: 0, height: 0 },
           shadowOpacity: 0.3,
           shadowRadius: 12,
@@ -79,6 +79,7 @@ export function GlassCard({
           ...cardStyle,
           pressed && styles.pressed,
         ]}
+        accessibilityRole={props.accessibilityRole || 'button'}
         {...props}
       >
         {children}

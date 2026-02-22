@@ -32,6 +32,12 @@ interface ModeOption {
 
 const modes: ModeOption[] = [
   {
+    mode: 'describe',
+    icon: 'eye',
+    label: 'See',
+    hint: 'Describe the scene around you',
+  },
+  {
     mode: 'read',
     icon: 'text',
     label: 'Read',
@@ -118,7 +124,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: layout.spacing.md,
     borderRadius: layout.borderRadius.full,
     minWidth: layout.minTouchTarget,
-    minHeight: 44,
+    minHeight: layout.minTouchTarget,
     justifyContent: 'center',
     borderWidth: 1,
   },

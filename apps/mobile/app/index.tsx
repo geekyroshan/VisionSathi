@@ -165,6 +165,8 @@ export default function HomeScreen() {
             styles.processingIndicator,
             { top: insets.top + 60 },
           ]}
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
         >
           <GlassCard intensity="strong" padding="small">
             <View style={styles.processingContent}>
@@ -280,8 +282,8 @@ const styles = StyleSheet.create({
     right: layout.spacing.md,
     top: 0,
     bottom: 0,
-    width: 44,
-    height: 44,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     alignItems: 'center',
     justifyContent: 'center',
   },

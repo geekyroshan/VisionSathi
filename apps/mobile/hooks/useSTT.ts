@@ -35,19 +35,25 @@ export function useSTT() {
   });
 
   const optionsRef = useRef<STTOptions | undefined>(undefined);
+  const transcriptDeliveredRef = useRef(false);
+  const lastTranscriptRef = useRef<string | null>(null);
   const hapticEnabled = useSettingsStore((state) => state.hapticEnabled);
 
   // Listen for speech recognition results
   useSpeechRecognitionEvent('result', (event) => {
     if (event.results && event.results.length > 0) {
       const transcript = event.results[0]?.transcript || '';
+      lastTranscriptRef.current = transcript;
       if (event.isFinal) {
         setState((s) => ({
           ...s,
           isProcessing: false,
           transcript,
         }));
-        optionsRef.current?.onTranscript?.(transcript);
+        if (optionsRef.current?.onTranscript) {
+          transcriptDeliveredRef.current = true;
+          optionsRef.current.onTranscript(transcript);
+        }
       } else {
         setState((s) => ({ ...s, transcript }));
       }
@@ -55,6 +61,8 @@ export function useSTT() {
   });
 
   useSpeechRecognitionEvent('start', () => {
+    transcriptDeliveredRef.current = false;
+    lastTranscriptRef.current = null;
     setState((s) => ({
       ...s,
       isListening: true,
@@ -66,6 +74,11 @@ export function useSTT() {
   });
 
   useSpeechRecognitionEvent('end', () => {
+    // Safety net: if onTranscript was never called but we have a transcript, deliver it now
+    if (!transcriptDeliveredRef.current && lastTranscriptRef.current && optionsRef.current?.onTranscript) {
+      transcriptDeliveredRef.current = true;
+      optionsRef.current.onTranscript(lastTranscriptRef.current);
+    }
     setState((s) => ({
       ...s,
       isListening: false,

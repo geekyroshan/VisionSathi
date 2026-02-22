@@ -113,14 +113,23 @@ export default function SettingsScreen() {
               autoCorrect={false}
               keyboardType="url"
               accessibilityLabel="Server URL"
+              accessibilityHint="Enter your server address, for example http://192.168.1.28:8000"
             />
           </View>
 
           <Pressable
             onPress={handleTestConnection}
             style={styles.testButton}
-            accessibilityLabel="Test server connection"
+            accessibilityLabel={
+              connectionStatus === 'connected'
+                ? 'Server connected successfully'
+                : connectionStatus === 'failed'
+                ? 'Server connection failed. Tap to retry.'
+                : 'Test server connection'
+            }
             accessibilityRole="button"
+            accessibilityHint="Double tap to test if the server is reachable"
+            accessibilityLiveRegion="polite"
           >
             {testing ? (
               <ActivityIndicator size="small" color={colors.accent.action} />
