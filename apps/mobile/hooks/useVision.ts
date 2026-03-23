@@ -5,7 +5,6 @@
  */
 
 import { useCallback, useRef } from 'react';
-import { CameraView } from 'expo-camera';
 
 import { useVisionStore } from '@/stores/visionStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -13,6 +12,7 @@ import { useTTS } from './useTTS';
 import { useSTT } from './useSTT';
 import { analyzeImage, sendConversation, ApiError } from '@/services/api';
 import { triggerHaptic } from '@/constants/haptics';
+import type { CameraHandle } from '@/components/camera/CameraView';
 
 import type { AppMode } from '../../../packages/shared/types';
 
@@ -68,7 +68,7 @@ function getErrorMessage(error: unknown): string {
   return 'Something went wrong. Please try again.';
 }
 
-export function useVision(cameraRef: React.RefObject<CameraView | null>) {
+export function useVision(cameraRef: React.RefObject<CameraHandle | null>) {
   const {
     processingState,
     currentMode,
@@ -99,11 +99,8 @@ export function useVision(cameraRef: React.RefObject<CameraView | null>) {
       setProcessingState('capturing');
       triggerHaptic('tap', hapticEnabled);
 
-      // Capture photo
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        base64: true,
-      });
+      // Capture photo (uses camera HAL with ViewShot fallback for emulator)
+      const photo = await cameraRef.current.takePicture();
 
       if (!photo?.base64) {
         throw new Error('Failed to capture photo');
@@ -178,10 +175,7 @@ export function useVision(cameraRef: React.RefObject<CameraView | null>) {
     // If no image captured yet, capture one first
     if (!lastFrameRef.current && cameraRef.current) {
       try {
-        const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.8,
-          base64: true,
-        });
+        const photo = await cameraRef.current.takePicture();
 
         if (photo?.base64) {
           captureFrame(photo.base64);

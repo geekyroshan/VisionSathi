@@ -13,7 +13,7 @@ from typing import Optional, List
 from services.moondream import get_moondream
 from services.openai_service import get_openai
 from prompts.describe import get_prompt_for_mode
-from prompts.personality import get_sathi_prompt, SATHI_SYSTEM_PROMPT
+from prompts.personality import get_sathi_prompt
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -54,7 +54,7 @@ async def analyze_image(request: AnalyzeRequest):
         raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
 
     prompt = get_prompt_for_mode(request.mode, request.verbosity)
-    source = "moondream"
+    source = "local"
     description = ""
     confidence = 0.0
     processing_ms = 0
@@ -86,7 +86,7 @@ async def analyze_image(request: AnalyzeRequest):
                 system_prompt=sathi_prompt,
                 user_prompt=prompt,
             )
-            source = "openai"
+            source = "cloud"
         except Exception as fallback_error:
             raise HTTPException(
                 status_code=500,
@@ -96,15 +96,32 @@ async def analyze_image(request: AnalyzeRequest):
     # Extract detected objects (simple heuristic)
     words = description.lower().split()
     common_objects = [
-        "door", "window", "chair", "table", "person", "car", "tree",
-        "sign", "light", "stairs", "wall", "floor", "ceiling", "road",
-        "sidewalk", "building", "phone", "book", "cup", "bottle"
+        "door",
+        "window",
+        "chair",
+        "table",
+        "person",
+        "car",
+        "tree",
+        "sign",
+        "light",
+        "stairs",
+        "wall",
+        "floor",
+        "ceiling",
+        "road",
+        "sidewalk",
+        "building",
+        "phone",
+        "book",
+        "cup",
+        "bottle",
     ]
     detected = [obj for obj in common_objects if obj in words]
 
     return AnalyzeResponse(
         id=f"resp_{int(time.time())}",
-        description=description,
+        description=description.strip(),
         confidence=confidence,
         processingMs=processing_ms,
         detectedObjects=detected if detected else None,

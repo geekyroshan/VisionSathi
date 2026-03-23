@@ -46,7 +46,7 @@ class ConversationResponse(BaseModel):
     confidence: float
     processingMs: int
     contextTokensUsed: int
-    source: str = "moondream"
+    source: str = "local"
 
 
 # In-memory conversation store with image cache
@@ -73,10 +73,13 @@ async def create_or_continue_conversation(request: ConversationRequest):
     conv_id = request.conversationId or f"conv_{uuid.uuid4().hex[:8]}"
 
     # Get or create conversation state
-    conv_state = conversations.get(conv_id, {
-        "history": [],
-        "last_image_base64": None,
-    })
+    conv_state = conversations.get(
+        conv_id,
+        {
+            "history": [],
+            "last_image_base64": None,
+        },
+    )
 
     # Decode new image if provided
     current_image_base64: Optional[str] = None
@@ -92,7 +95,7 @@ async def create_or_continue_conversation(request: ConversationRequest):
     if current_image_base64 is None:
         raise HTTPException(
             status_code=400,
-            detail="No image available. Please provide an image for new conversations."
+            detail="No image available. Please provide an image for new conversations.",
         )
 
     # Build conversation history
@@ -113,7 +116,11 @@ async def create_or_continue_conversation(request: ConversationRequest):
             raise RuntimeError("Moondream not loaded")
 
         if history_messages:
-            response_text, confidence, processing_ms = await moondream.analyze_with_context(
+            (
+                response_text,
+                confidence,
+                processing_ms,
+            ) = await moondream.analyze_with_context(
                 current_image_base64,
                 request.message,
                 history_messages,
@@ -137,7 +144,11 @@ async def create_or_continue_conversation(request: ConversationRequest):
 
         try:
             if history_messages:
-                response_text, confidence, processing_ms = await openai_svc.analyze_with_context(
+                (
+                    response_text,
+                    confidence,
+                    processing_ms,
+                ) = await openai_svc.analyze_with_context(
                     current_image_base64,
                     system_prompt=SATHI_SYSTEM_PROMPT,
                     user_prompt=request.message,
@@ -151,7 +162,7 @@ async def create_or_continue_conversation(request: ConversationRequest):
                     system_prompt=SATHI_SYSTEM_PROMPT,
                     user_prompt=full_prompt,
                 )
-            source = "openai"
+            source = "cloud"
         except Exception as fallback_error:
             raise HTTPException(
                 status_code=500,
@@ -171,7 +182,7 @@ async def create_or_continue_conversation(request: ConversationRequest):
 
     return ConversationResponse(
         conversationId=conv_id,
-        response=response_text,
+        response=response_text.strip(),
         confidence=confidence,
         processingMs=processing_ms,
         contextTokensUsed=context_tokens,
@@ -184,8 +195,7 @@ async def get_conversation(conversation_id: str):
     """Retrieve conversation history."""
     if conversation_id not in conversations:
         raise HTTPException(
-            status_code=404,
-            detail=f"Conversation {conversation_id} not found"
+            status_code=404, detail=f"Conversation {conversation_id} not found"
         )
 
     conv = conversations[conversation_id]
@@ -204,6 +214,5 @@ async def delete_conversation(conversation_id: str):
         return {"deleted": True, "conversationId": conversation_id}
 
     raise HTTPException(
-        status_code=404,
-        detail=f"Conversation {conversation_id} not found"
+        status_code=404, detail=f"Conversation {conversation_id} not found"
     )

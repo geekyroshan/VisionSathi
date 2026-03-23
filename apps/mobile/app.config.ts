@@ -69,11 +69,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
     'expo-font',
     'expo-speech-recognition',
+    'expo-image-picker',
     [
       'expo-build-properties',
       {
         android: {
           usesCleartextTraffic: true,
+          compileSdkVersion: 36,
+          targetSdkVersion: 35,
+          minSdkVersion: 24,
         },
       },
     ],

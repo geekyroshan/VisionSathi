@@ -5,9 +5,9 @@
  * Conditionally routes to onboarding for first-time users.
  */
 
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import { colors } from '@/constants/colors';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -18,9 +18,18 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
+  const navigationState = useRootNavigationState();
+  const [isLayoutMounted, setIsLayoutMounted] = useState(false);
   const hasCompletedOnboarding = useSettingsStore(
     (state) => state.hasCompletedOnboarding
   );
+
+  // Track when the navigation is ready
+  useEffect(() => {
+    if (navigationState?.key) {
+      setIsLayoutMounted(true);
+    }
+  }, [navigationState?.key]);
 
   useEffect(() => {
     // Hide splash screen after app is ready
@@ -33,6 +42,9 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    // Don't navigate until the root layout is mounted
+    if (!isLayoutMounted) return;
+
     // Redirect to onboarding if not completed, or away from it if completed
     const currentSegment = segments[0];
 
@@ -41,7 +53,7 @@ export default function RootLayout() {
     } else if (hasCompletedOnboarding && (currentSegment as string) === 'onboarding') {
       router.replace('/');
     }
-  }, [hasCompletedOnboarding, segments, router]);
+  }, [hasCompletedOnboarding, segments, router, isLayoutMounted]);
 
   return (
     <>

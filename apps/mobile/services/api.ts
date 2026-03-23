@@ -14,14 +14,24 @@ import type {
   NavigationResponse,
 } from '../../../packages/shared/types';
 
+import { Platform } from 'react-native';
+
+// On Android emulator, localhost refers to the emulator itself.
+// Use 10.0.2.2 to reach the host machine's localhost.
+const DEFAULT_API_URL = Platform.OS === 'android'
+  ? 'http://10.0.2.2:8000'
+  : 'http://localhost:8000';
+
 // Dynamic API URL - checks settings store first
 function getApiUrl(): string {
   // Try settings store (user-configured URL)
   const settingsUrl = useSettingsStore.getState().serverUrl;
   if (settingsUrl) return settingsUrl;
 
-  // Fall back to env var
-  return Constants.expoConfig?.extra?.apiUrl || 'http://localhost:8000';
+  // Fall back to platform-aware default
+  // (Don't use expoConfig.extra.apiUrl as it may contain localhost which
+  // doesn't work on Android emulator)
+  return DEFAULT_API_URL;
 }
 
 const TIMEOUT_MS = 30000; // 30 seconds - Moondream inference can take time

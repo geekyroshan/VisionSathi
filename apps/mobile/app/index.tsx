@@ -9,7 +9,6 @@ import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { View, StyleSheet, Pressable, StatusBar as RNStatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { CameraView as ExpoCameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
@@ -23,6 +22,7 @@ import { checkHealth } from '@/services/api';
 
 import { Text, GlassCard, StatusBar } from '@/components/ui';
 import { CameraView, CaptureButton, ModeSelector } from '@/components/camera';
+import type { CameraHandle } from '@/components/camera/CameraView';
 import { ResponseCard } from '@/components/response';
 
 import type { AppMode } from '../../../packages/shared/types';
@@ -30,7 +30,7 @@ import type { AppMode } from '../../../packages/shared/types';
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const cameraRef = useRef<ExpoCameraView>(null);
+  const cameraRef = useRef<CameraHandle>(null);
 
   // Connection state
   const [isConnected, setIsConnected] = useState(false);
@@ -111,7 +111,7 @@ export default function HomeScreen() {
 
       {/* Full-bleed Camera Preview (edge-to-edge) */}
       <View style={styles.cameraFullBleed}>
-        <CameraView cameraRef={cameraRef} />
+        <CameraView ref={cameraRef} />
 
         {/* Listening Overlay */}
         {processingState === 'listening' && (
